@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: courrier_plus
+      POSTGRES_PASSWORD: courrier_plus_dev_pw
+      POSTGRES_DB: courrier_plus
+    ports:
+      - "5433:5432"
+    volumes:
+      - courrier_plus_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courrier_plus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://courrier_plus:courrier_plus_dev_pw@db:5432/courrier_plus
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - courrier_plus_uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "4173:4173"
+
+volumes:
+  courrier_plus_pg_data:
+  courrier_plus_uploads:
