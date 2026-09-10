@@ -1,6 +1,7 @@
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 from app.models.enums import EmailStatus
+from app.services.email_service import settings as email_settings
 from tests.conftest import sample_letter_form
 
 
@@ -20,7 +21,7 @@ def test_resend_failure_is_handled_gracefully(client, db_session, auth_headers):
     letter_id = client.post("/api/letters", data=sample_letter_form()).json()["id"]
 
     with (
-        patch("app.services.email_service.settings.is_email_mock_mode", False),
+        patch.object(type(email_settings), "is_email_mock_mode", new_callable=PropertyMock, return_value=False),
         patch("resend.Emails.send", side_effect=RuntimeError("Resend API unreachable")),
     ):
         from app.services import email_service

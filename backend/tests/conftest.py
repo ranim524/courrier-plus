@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import Base, get_db
+from app.core.rate_limit import limiter
 from app.main import app
 from app.services.admin_service import create_admin_if_not_exists
 
@@ -36,6 +37,15 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """The rate limiter's in-memory storage is process-global; without a reset,
+    running many tests against the same endpoint within one minute would trip
+    limits meant for real abusive traffic, not the test suite itself."""
+    limiter.reset()
+    yield
 
 
 @pytest.fixture()

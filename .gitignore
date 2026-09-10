@@ -39,3 +39,6 @@ npm-debug.log*
 
 # Docker
 *.pid
+
+# Claude Code local session state
+.claude/scheduled_tasks.lock
