@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react"
 import type { RecipientInfo, SenderInfo } from "../types/letter"
+import type { PricingBreakdown } from "../types/pricing"
 
 interface WizardState {
   sender: SenderInfo
@@ -7,6 +8,8 @@ interface WizardState {
   subject: string
   message: string
   document: File | null
+  acknowledgmentOfReceipt: boolean
+  pricing: PricingBreakdown | null
   letterId: string | null
   transactionId: string | null
   reference: string | null
@@ -16,6 +19,8 @@ interface WizardContextValue extends WizardState {
   setSender: (sender: SenderInfo) => void
   setRecipient: (recipient: RecipientInfo) => void
   setLetterContent: (subject: string, message: string, document: File | null) => void
+  setAcknowledgmentOfReceipt: (value: boolean) => void
+  setPricing: (pricing: PricingBreakdown | null) => void
   setLetterCreated: (letterId: string) => void
   setTransactionId: (transactionId: string) => void
   setReference: (reference: string) => void
@@ -33,6 +38,8 @@ export function SendLetterWizardProvider({ children }: { children: ReactNode }) 
   const [subject, setSubject] = useState("")
   const [message, setMessage] = useState("")
   const [document, setDocument] = useState<File | null>(null)
+  const [acknowledgmentOfReceipt, setAcknowledgmentOfReceiptState] = useState(false)
+  const [pricing, setPricingState] = useState<PricingBreakdown | null>(null)
   const [letterId, setLetterId] = useState<string | null>(null)
   const [transactionId, setTransactionIdState] = useState<string | null>(null)
   const [reference, setReferenceState] = useState<string | null>(null)
@@ -44,6 +51,8 @@ export function SendLetterWizardProvider({ children }: { children: ReactNode }) 
       subject,
       message,
       document,
+      acknowledgmentOfReceipt,
+      pricing,
       letterId,
       transactionId,
       reference,
@@ -54,6 +63,8 @@ export function SendLetterWizardProvider({ children }: { children: ReactNode }) 
         setMessage(m)
         setDocument(d)
       },
+      setAcknowledgmentOfReceipt: (value) => setAcknowledgmentOfReceiptState(value),
+      setPricing: (pricing) => setPricingState(pricing),
       setLetterCreated: (id) => setLetterId(id),
       setTransactionId: (id) => setTransactionIdState(id),
       setReference: (ref) => setReferenceState(ref),
@@ -63,12 +74,25 @@ export function SendLetterWizardProvider({ children }: { children: ReactNode }) 
         setSubject("")
         setMessage("")
         setDocument(null)
+        setAcknowledgmentOfReceiptState(false)
+        setPricingState(null)
         setLetterId(null)
         setTransactionIdState(null)
         setReferenceState(null)
       },
     }),
-    [sender, recipient, subject, message, document, letterId, transactionId, reference],
+    [
+      sender,
+      recipient,
+      subject,
+      message,
+      document,
+      acknowledgmentOfReceipt,
+      pricing,
+      letterId,
+      transactionId,
+      reference,
+    ],
   )
 
   return <WizardContext.Provider value={value}>{children}</WizardContext.Provider>

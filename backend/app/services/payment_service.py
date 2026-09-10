@@ -39,7 +39,7 @@ def create_payment(db: Session, letter_id: UUID) -> Payment:
         return existing
 
     provider = get_payment_provider()
-    intent = provider.create_payment(float(letter.price), letter.currency)
+    intent = provider.create_payment(float(letter.total_amount), letter.currency)
 
     payment = Payment(
         letter_id=letter.id,

@@ -1,30 +1,69 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "../../components/Button"
+import { ErrorMessage } from "../../components/ErrorMessage"
 import { FileDropzone } from "../../components/FileDropzone"
 import { Input } from "../../components/Input"
+import { PricingSummary } from "../../components/PricingSummary"
 import { StepProgress } from "../../components/StepProgress"
 import { TextArea } from "../../components/TextArea"
 import { useSendLetterWizard } from "../../hooks/useSendLetterWizard"
+import { extractErrorMessage } from "../../services/apiClient"
+import { previewPrice } from "../../services/pricing"
+import type { PricingBreakdown } from "../../types/pricing"
 import { SEND_STEPS, STEP_NUMBERS } from "./steps"
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024
+const PREVIEW_DEBOUNCE_MS = 400
 
 type Mode = "message" | "pdf"
 
 export function DocumentStep() {
-  const { subject, message, document, setLetterContent, recipient } = useSendLetterWizard()
+  const wizard = useSendLetterWizard()
+  const { subject, message, document, acknowledgmentOfReceipt, recipient } = wizard
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(document ? "pdf" : "message")
   const [subjectValue, setSubjectValue] = useState(subject)
   const [messageValue, setMessageValue] = useState(message)
   const [file, setFile] = useState<File | null>(document)
+  const [ackOfReceipt, setAckOfReceipt] = useState(acknowledgmentOfReceipt)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [pricing, setPricingLocal] = useState<PricingBreakdown | null>(null)
+  const [pricingError, setPricingError] = useState<string | null>(null)
+  const [pricingLoading, setPricingLoading] = useState(false)
 
   if (!recipient.email) {
     navigate("/send/recipient")
     return null
   }
+
+  // The backend is the only source of truth for page count and price: every
+  // time the PDF or the acknowledgment-of-receipt option changes, ask it for
+  // a fresh preview rather than computing anything client-side.
+  useEffect(() => {
+    if (mode === "pdf" && !file) {
+      setPricingLocal(null)
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setPricingLoading(true)
+      setPricingError(null)
+      previewPrice(mode === "pdf" ? file : null, ackOfReceipt)
+        .then((breakdown) => {
+          setPricingLocal(breakdown)
+          wizard.setPricing(breakdown)
+        })
+        .catch((err) => {
+          setPricingLocal(null)
+          setPricingError(extractErrorMessage(err))
+        })
+        .finally(() => setPricingLoading(false))
+    }, PREVIEW_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, file, ackOfReceipt])
 
   function validate(): boolean {
     const next: Record<string, string> = {}
@@ -40,6 +79,8 @@ export function DocumentStep() {
         next.document = "Seuls les fichiers PDF sont acceptés"
       } else if (file.size > MAX_SIZE_BYTES) {
         next.document = "Le fichier dépasse la taille maximale de 10 Mo"
+      } else if (pricingError) {
+        next.document = pricingError
       }
     }
     setErrors(next)
@@ -49,7 +90,8 @@ export function DocumentStep() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!validate()) return
-    setLetterContent(subjectValue, mode === "message" ? messageValue : "", mode === "pdf" ? file : null)
+    wizard.setLetterContent(subjectValue, mode === "message" ? messageValue : "", mode === "pdf" ? file : null)
+    wizard.setAcknowledgmentOfReceipt(ackOfReceipt)
     navigate("/send/review")
   }
 
@@ -94,14 +136,32 @@ export function DocumentStep() {
             error={errors.message}
           />
         ) : (
-          <FileDropzone file={file} onFileSelected={setFile} error={errors.document} />
+          <FileDropzone file={file} onFileSelected={setFile} error={errors.document ?? (file ? pricingError ?? undefined : undefined)} />
         )}
+
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={ackOfReceipt}
+            onChange={(e) => setAckOfReceipt(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          Avec accusé de réception (+2.500 TND)
+        </label>
+
+        {pricingLoading && <p className="text-sm text-slate-400">Calcul du tarif...</p>}
+        {pricing && !pricingLoading && (
+          <PricingSummary pricing={pricing} documentName={mode === "pdf" ? file?.name : null} />
+        )}
+        {mode === "pdf" && file && pricingError && <ErrorMessage message={pricingError} />}
 
         <div className="mt-4 flex justify-between">
           <Button type="button" variant="secondary" onClick={() => navigate("/send/recipient")}>
             Retour
           </Button>
-          <Button type="submit">Continuer</Button>
+          <Button type="submit" disabled={mode === "pdf" && (!pricing || !!pricingError)}>
+            Continuer
+          </Button>
         </div>
       </form>
     </div>

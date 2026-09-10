@@ -22,11 +22,25 @@ All tables have `created_at`/`updated_at` timestamptz columns.
 | message | text | nullable — mutually exclusive with an attached document |
 | content_type | enum | `TEXT_MESSAGE` \| `PDF_UPLOAD` |
 | status | enum | see lifecycle below |
-| price / currency | numeric(10,2) / varchar(3) | snapshot of price at creation time |
+| page_count | integer | PDF page count (or 1 for a text-only letter), determined server-side |
+| estimated_weight_g | integer | `page_count * ESTIMATED_GRAMS_PER_PAGE` (see `pricing_service.py`) |
+| weight_bracket | varchar(20) | label of the matched tariff bracket, e.g. `20-100g` |
+| base_postage | numeric(10,3) | postage for the matched weight bracket |
+| registered_fee | numeric(10,3) | fixed registered-mail fee |
+| acknowledgment_of_receipt | boolean | whether the sender requested an accusé de réception |
+| acknowledgment_fee | numeric(10,3) | AR fee, `0` if not requested |
+| total_amount / currency | numeric(10,3) / varchar(3) | full price snapshot at creation time |
 
 **Status enum**: `DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED → OPENED → RECEIVED`, with
 exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. Transitions are enforced in code
 (`app/services/letter_state.py`), not by a DB trigger — kept simple and explicit.
+
+**Pricing is a snapshot, not a live calculation.** `total_amount` and the rest of the pricing
+breakdown are computed once by `app/services/pricing_service.py` at letter-creation time and
+stored on the row. If the tariff configuration (brackets, fees, grams-per-page) changes later,
+already-created letters keep the price they were created with — nothing is recomputed
+retroactively. See `docs/api.md` for the pricing endpoints and `pricing_service.py` for the tariff
+table itself.
 
 ## `documents`
 One-to-one with `letters` (unique FK). Stores `original_filename` (display only),

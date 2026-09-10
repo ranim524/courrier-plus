@@ -91,7 +91,36 @@ See `backend/.env.example` and `frontend/.env.example`. Key ones:
   what would have been sent. Get a real key at https://resend.com when ready for real delivery.
 - `PAYMENT_PROVIDER=mock` — the only provider implemented so far; see `docs/architecture.md` for
   how to add a real one.
-- `LETTER_PRICE` / `CURRENCY=TND` — configurable price shown throughout the app and emails.
+- `CURRENCY=TND` — currency shown throughout the app and emails. There is no fixed price env var:
+  pricing is dynamic (see below).
+
+## Pricing
+
+Courrier+ prices each letter dynamically, modeled on the Tunisian Post's weight-based registered-mail
+tariff:
+
+```
+TOTAL = postage (by estimated weight) + registered-mail fee (3.000 TND) + AR fee (2.500 TND, optional)
+```
+
+Since Courrier+ is digital, weight is **estimated** from the PDF's page count
+(`ESTIMATED_GRAMS_PER_PAGE = 5`, configurable in `app/services/pricing_service.py`) — a
+text-only letter is priced as a single page. The backend always determines the page count itself
+from the uploaded PDF bytes; it never trusts a price, page count, or weight sent by the client.
+Maximum document size accepted: 400 pages (2000g equivalent).
+
+- `POST /api/pricing/preview` — live price preview used by the send-letter wizard as the sender
+  uploads a PDF or toggles "Avec accusé de réception".
+- `POST /api/pricing/calculate` — pure calculation from an already-known page count.
+
+The computed breakdown (`page_count`, `estimated_weight_g`, `weight_bracket`, `base_postage`,
+`registered_fee`, `acknowledgment_fee`, `total_amount`) is stored on the `letters` row as a
+snapshot at creation time — see `docs/database.md`. If the tariff table changes later, letters
+already created keep their original price.
+
+> Courrier+'s page-based weight estimate is a pricing convention inspired by the Tunisian Post
+> tariff table. It does not represent the actual physical weight of a printed document, and does
+> not by itself establish legal equivalence with physical registered mail.
 
 ## Resend setup
 
@@ -101,10 +130,11 @@ See `backend/.env.example` and `frontend/.env.example`. Key ones:
 
 ## Mock payment
 
-`PAYMENT_PROVIDER=mock` is the default. The send-letter flow calls `POST /api/payments/create`,
-then `POST /api/payments/mock/confirm` to simulate success or failure — no real payment account or
-credentials are involved. See `docs/architecture.md` for how a real Tunisian provider would plug
-into the same `PaymentProvider` interface.
+`PAYMENT_PROVIDER=mock` is the default. The send-letter flow calls `POST /api/payments/create`
+(amount = the letter's computed `total_amount`), then `POST /api/payments/mock/confirm` to simulate
+success or failure — no real payment account or credentials are involved. See
+`docs/architecture.md` for how a real Tunisian provider would plug into the same `PaymentProvider`
+interface.
 
 ## Docker
 

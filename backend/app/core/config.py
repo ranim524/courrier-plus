@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     payment_provider: str = "mock"
     payment_api_key: str = ""
     payment_secret: str = ""
-    letter_price: float = 15.00
+    # Pricing is dynamic (see app/services/pricing_service.py) -- currency is
+    # still a deployment-level scalar, but there is no fixed letter price.
     currency: str = "TND"
 
     # File uploads

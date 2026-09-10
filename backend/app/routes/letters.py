@@ -25,6 +25,7 @@ async def create_letter(
     recipient_phone: str | None = Form(default=None),
     subject: str = Form(...),
     message: str | None = Form(default=None),
+    acknowledgment_of_receipt: bool = Form(default=False),
     document: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
 ) -> LetterRead:
@@ -41,6 +42,7 @@ async def create_letter(
             ),
             subject=subject,
             message=message,
+            acknowledgment_of_receipt=acknowledgment_of_receipt,
         )
     except ValidationError as exc:
         first_error = exc.errors()[0]

@@ -8,9 +8,13 @@ from app.models.enums import ActorType, DocumentSourceType, LetterEventType, Let
 from app.models.letter import Letter
 from app.repositories import letter_repository
 from app.schemas.letter import LetterCreate
-from app.services import audit_service, document_service
+from app.services import audit_service, document_service, pricing_service
 
 settings = get_settings()
+
+# A text-message-only letter has no PDF to count pages from. It is priced as
+# the minimum, single-page-equivalent weight bracket (see pricing_service).
+TEXT_MESSAGE_PAGE_COUNT = 1
 
 
 def create_letter(
@@ -30,6 +34,18 @@ def create_letter(
 
     content_type = DocumentSourceType.PDF_UPLOAD if has_file else DocumentSourceType.TEXT_MESSAGE
 
+    # The backend is the sole source of truth for pricing: page count is
+    # always derived here from the actual uploaded bytes, never accepted from
+    # the client, and the price is computed from it -- never trusted from
+    # the request. See app/services/pricing_service.py.
+    if has_file:
+        document_service.validate_pdf(file_name or "document.pdf", file_content_type, file_bytes)
+        page_count = document_service.count_pdf_pages(file_bytes)
+    else:
+        page_count = TEXT_MESSAGE_PAGE_COUNT
+
+    breakdown = pricing_service.calculate_price(page_count, payload.acknowledgment_of_receipt)
+
     letter = Letter(
         sender_first_name=payload.sender.first_name,
         sender_last_name=payload.sender.last_name,
@@ -43,8 +59,15 @@ def create_letter(
         message=payload.message if has_message else None,
         content_type=content_type,
         status=LetterStatus.DRAFT,
-        price=settings.letter_price,
-        currency=settings.currency,
+        page_count=breakdown.page_count,
+        estimated_weight_g=breakdown.estimated_weight_g,
+        weight_bracket=breakdown.weight_bracket,
+        base_postage=breakdown.base_postage,
+        registered_fee=breakdown.registered_fee,
+        acknowledgment_of_receipt=breakdown.acknowledgment_of_receipt,
+        acknowledgment_fee=breakdown.acknowledgment_fee,
+        total_amount=breakdown.total,
+        currency=breakdown.currency,
     )
     letter = letter_repository.create(db, letter)
 

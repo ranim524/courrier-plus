@@ -2,19 +2,18 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "../../components/Button"
 import { ErrorMessage } from "../../components/ErrorMessage"
+import { PricingSummary } from "../../components/PricingSummary"
 import { StepProgress } from "../../components/StepProgress"
+import { useSendLetterWizard } from "../../hooks/useSendLetterWizard"
 import { extractErrorMessage } from "../../services/apiClient"
-import { getPublicConfig } from "../../services/config"
 import { createLetter } from "../../services/letters"
 import { createPayment } from "../../services/payments"
-import { useSendLetterWizard } from "../../hooks/useSendLetterWizard"
+import { previewPrice } from "../../services/pricing"
 import { SEND_STEPS, STEP_NUMBERS } from "./steps"
 
 export function ReviewStep() {
   const wizard = useSendLetterWizard()
   const navigate = useNavigate()
-  const [price, setPrice] = useState<number | null>(null)
-  const [currency, setCurrency] = useState("TND")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -23,14 +22,14 @@ export function ReviewStep() {
       navigate("/send/document")
       return
     }
-    getPublicConfig()
-      .then((config) => {
-        setPrice(config.letter_price)
-        setCurrency(config.currency)
-      })
-      .catch(() => {
-        setPrice(15)
-      })
+    // The pricing preview from the document step is normally already stored
+    // in the wizard, but refresh it here too in case the user navigated back
+    // and forth -- this display is informational only, the backend always
+    // recomputes the authoritative total when the letter is actually created.
+    if (!wizard.pricing) {
+      previewPrice(wizard.document, wizard.acknowledgmentOfReceipt).then(wizard.setPricing).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleConfirm() {
@@ -45,6 +44,7 @@ export function ReviewStep() {
           subject: wizard.subject,
           message: wizard.message || undefined,
           document: wizard.document,
+          acknowledgmentOfReceipt: wizard.acknowledgmentOfReceipt,
         })
         letterId = letter.id
         wizard.setLetterCreated(letter.id)
@@ -91,12 +91,11 @@ export function ReviewStep() {
           )}
         </div>
 
-        <div className="rounded-xl border border-brand-200 bg-brand-50 p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Montant à payer</h2>
-          <p className="mt-1 text-xl font-bold text-brand-800">
-            {price !== null ? `${price.toFixed(2)} ${currency}` : "..."}
-          </p>
-        </div>
+        {wizard.pricing ? (
+          <PricingSummary pricing={wizard.pricing} documentName={wizard.document?.name} />
+        ) : (
+          <p className="text-sm text-slate-400">Calcul du tarif...</p>
+        )}
       </div>
 
       <ErrorMessage message={error} />
@@ -105,7 +104,7 @@ export function ReviewStep() {
         <Button type="button" variant="secondary" onClick={() => navigate("/send/document")} disabled={submitting}>
           Retour
         </Button>
-        <Button type="button" onClick={handleConfirm} isLoading={submitting}>
+        <Button type="button" onClick={handleConfirm} isLoading={submitting} disabled={!wizard.pricing}>
           Procéder au paiement
         </Button>
       </div>

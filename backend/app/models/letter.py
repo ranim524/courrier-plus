@@ -1,5 +1,5 @@
-from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Numeric, String, Text
+from sqlalchemy import Boolean, Enum as SAEnum
+from sqlalchemy import Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -34,7 +34,18 @@ class Letter(UUIDPKMixin, TimestampMixin, Base):
         SAEnum(LetterStatus, name="letter_status"), nullable=False, default=LetterStatus.DRAFT
     )
 
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    # Pricing breakdown -- a snapshot computed at creation time by
+    # pricing_service.calculate_price(). Never recomputed later: if the tariff
+    # configuration changes, previously priced letters keep their original
+    # amount (see docs/database.md).
+    page_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    estimated_weight_g: Mapped[int] = mapped_column(Integer, nullable=False)
+    weight_bracket: Mapped[str] = mapped_column(String(20), nullable=False)
+    base_postage: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    registered_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    acknowledgment_of_receipt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    acknowledgment_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    total_amount: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="TND")
 
     document = relationship("Document", back_populates="letter", uselist=False, cascade="all, delete-orphan")

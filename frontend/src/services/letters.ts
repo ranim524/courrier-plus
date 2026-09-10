@@ -7,6 +7,7 @@ export interface CreateLetterInput {
   subject: string
   message?: string
   document?: File | null
+  acknowledgmentOfReceipt: boolean
 }
 
 export async function createLetter(input: CreateLetterInput): Promise<LetterRead> {
@@ -24,6 +25,7 @@ export async function createLetter(input: CreateLetterInput): Promise<LetterRead
   form.append("subject", input.subject)
   if (input.message) form.append("message", input.message)
   if (input.document) form.append("document", input.document)
+  form.append("acknowledgment_of_receipt", String(input.acknowledgmentOfReceipt))
 
   const { data } = await apiClient.post<LetterRead>("/api/letters", form, {
     headers: { "Content-Type": "multipart/form-data" },

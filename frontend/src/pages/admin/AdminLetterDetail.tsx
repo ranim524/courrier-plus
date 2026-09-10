@@ -75,6 +75,54 @@ export function AdminLetterDetail() {
           )}
         </div>
 
+        <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Tarification</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-slate-400">Pages</p>
+              <p className="font-semibold text-slate-800">{letter.page_count}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Poids estimé</p>
+              <p className="font-semibold text-slate-800">{letter.estimated_weight_g} g</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Tranche tarifaire</p>
+              <p className="font-semibold text-slate-800">{letter.weight_bracket}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Accusé de réception</p>
+              <p className="font-semibold text-slate-800">{letter.acknowledgment_of_receipt ? "Oui" : "Non"}</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-col gap-1.5 border-t border-slate-100 pt-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Affranchissement</span>
+              <span className="text-slate-800">
+                {letter.base_postage.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Recommandation</span>
+              <span className="text-slate-800">
+                {letter.registered_fee.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Accusé de réception</span>
+              <span className="text-slate-800">
+                {letter.acknowledgment_fee.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold">
+              <span className="text-slate-700">Total</span>
+              <span className="text-brand-700">
+                {letter.total_amount.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Évènements</h2>
           <ul className="flex flex-col gap-2 text-sm">

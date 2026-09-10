@@ -98,9 +98,20 @@ def sample_letter_form() -> dict:
     }
 
 
-def minimal_pdf_bytes() -> bytes:
-    return b"%PDF-1.4\n%mock pdf content for tests\n%%EOF"
+def minimal_pdf_bytes(page_count: int = 1) -> bytes:
+    """Builds a real, parseable PDF with the given number of blank pages --
+    needed because the pricing engine actually counts pages via pypdf, not
+    just checks the file's magic bytes."""
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(page_count):
+        writer.add_blank_page(width=200, height=200)
+
+    buffer = io.BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
 
 
-def make_pdf_file() -> tuple[str, io.BytesIO, str]:
-    return ("document.pdf", io.BytesIO(minimal_pdf_bytes()), "application/pdf")
+def make_pdf_file(page_count: int = 1) -> tuple[str, io.BytesIO, str]:
+    return ("document.pdf", io.BytesIO(minimal_pdf_bytes(page_count)), "application/pdf")

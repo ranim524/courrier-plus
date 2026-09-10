@@ -25,6 +25,7 @@ class LetterCreate(BaseModel):
     recipient: RecipientInfo
     subject: str = Field(min_length=1, max_length=255)
     message: str | None = Field(default=None, max_length=20000)
+    acknowledgment_of_receipt: bool = False
 
     @field_validator("message")
     @classmethod
@@ -57,7 +58,14 @@ class LetterRead(BaseModel):
     message: str | None
     content_type: DocumentSourceType
     status: LetterStatus
-    price: float
+    page_count: int
+    estimated_weight_g: int
+    weight_bracket: str
+    base_postage: float
+    registered_fee: float
+    acknowledgment_of_receipt: bool
+    acknowledgment_fee: float
+    total_amount: float
     currency: str
     created_at: datetime
     updated_at: datetime
@@ -75,7 +83,7 @@ class LetterSummary(BaseModel):
     recipient_last_name: str
     subject: str
     status: LetterStatus
-    price: float
+    total_amount: float
     currency: str
     created_at: datetime
 

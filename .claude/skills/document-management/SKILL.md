@@ -17,6 +17,10 @@ Any time you touch document upload, storage, retrieval, or hashing.
 - SHA-256 computed via `app/utils/hashing.py::sha256_of_bytes(data: bytes) -> str`, computed from the actual uploaded bytes before writing to disk.
 - Document retrieval always goes through an authorized route (admin JWT, or the letter's own recipient access token) — never a static file mount serving `backend/uploads/` directly.
 
+## Pricing integration
+- `document_service.count_pdf_pages(data: bytes) -> int` (via `pypdf`) is the sole source of truth for page count — never accept a page count from the client. `letter_service.create_letter()` calls it, then `pricing_service.calculate_price()` to compute the price snapshot. See [[payment]].
+- A corrupt/unreadable PDF or one exceeding 400 pages is rejected with a clear `ValidationAppError` before the file is ever stored.
+
 ## Important rules (see also [[security]])
 - Validate extension AND MIME type AND that the content actually starts with `%PDF-` magic bytes — reject anything else.
 - Enforce max size before reading the whole file into memory where practical (check `Content-Length` and re-check actual bytes length).

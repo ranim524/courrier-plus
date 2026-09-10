@@ -16,7 +16,8 @@ Any time you touch payment creation, status, or webhook handling.
 - `app/services/payment/mock_provider.py` implements it: `create_payment` returns a fake intent immediately payable via a `/api/payments/mock/confirm` dev-only endpoint, simulating SUCCESS or FAILED.
 - Provider selection via `PAYMENT_PROVIDER` env var (`mock` for now), resolved in `app/services/payment/__init__.py::get_payment_provider()`.
 - Payment states: `PENDING`, `PAID`, `FAILED`, `REFUNDED` — stored in `payments.status`, transitions only via `app/services/payment_service.py`.
-- Amount is configurable via `LETTER_PRICE` env var and `CURRENCY=TND`, never hard-coded in routes/components. Frontend fetches price from a `/api/config` (or embeds via build-time env) rather than hard-coding "15 TND" in JSX.
+- Amount is **not** a fixed config value: it comes from `app/services/pricing_service.py`, computed per-letter from PDF page count → estimated weight → tariff bracket + registered fee + optional AR fee (see [[document-management]] for page counting). `CURRENCY=TND` is still a config scalar. `payment_service.create_payment()` always reads `letter.total_amount` (the snapshot stored at letter creation) — never a client-supplied amount, and never recomputed after the fact.
+- Frontend never computes or sends a price: it calls `POST /api/pricing/preview` for a live display estimate, but the authoritative amount is whatever the backend stored on the letter at creation time.
 
 ## Important rules
 - **Idempotency is mandatory.** Webhook/confirm handling must check current payment status before transitioning — a repeated call with the same `transaction_id` must not create a duplicate payment, letter activation, or email. Use the payment's unique `transaction_id` as the idempotency key and short-circuit if already processed.

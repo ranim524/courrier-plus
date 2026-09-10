@@ -1,6 +1,9 @@
+import io
 from datetime import datetime, timezone
 from uuid import UUID
 
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -36,6 +39,22 @@ def validate_pdf(filename: str, content_type: str | None, data: bytes) -> None:
 
     if not data.startswith(PDF_MAGIC_BYTES):
         raise ValidationAppError("The file does not appear to be a valid PDF")
+
+
+def count_pdf_pages(data: bytes) -> int:
+    """Determines the exact page count of a PDF from its bytes. This is the
+    source of truth for the Courrier+ pricing engine -- the page count is
+    never accepted from the client."""
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        page_count = len(reader.pages)
+    except PdfReadError as exc:
+        raise ValidationAppError("Le fichier PDF est invalide ou illisible.") from exc
+
+    if page_count < 1:
+        raise ValidationAppError("Le document PDF ne contient aucune page.")
+
+    return page_count
 
 
 def store_document(db: Session, letter_id: UUID, filename: str, content_type: str, data: bytes) -> Document:

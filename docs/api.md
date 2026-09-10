@@ -9,11 +9,39 @@ All responses use a consistent error shape on failure: `{"detail": "..."}`.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/letters` | Create a letter (multipart form: sender/recipient fields, subject, message OR `document` PDF file). Returns `201`. |
-| POST | `/api/payments/create` | Start payment for a letter (`{"letter_id": "..."}`). Returns `201`. |
+| POST | `/api/letters` | Create a letter (multipart form: sender/recipient fields, subject, message OR `document` PDF file, `acknowledgment_of_receipt`). Returns `201`. Price is computed server-side — see Pricing below. |
+| POST | `/api/payments/create` | Start payment for a letter (`{"letter_id": "..."}`). Amount is the letter's stored `total_amount`. Returns `201`. |
 | POST | `/api/payments/mock/confirm` | Dev-only mock payment confirmation (`{"transaction_id", "outcome": "success"|"failure"}`). Idempotent. |
 | POST | `/api/payments/webhook` | Generic webhook entry point (same shape/idempotency as mock confirm), reserved for a future real provider. |
-| GET | `/api/config` | Public config: current letter price and currency. |
+| GET | `/api/config` | Public config: currency and static tariff constants (registered fee, AR fee, grams/page, max pages) — no fixed price, pricing is dynamic. |
+
+## Public — Pricing
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/pricing/calculate` | `{"page_count": 10, "acknowledgment_of_receipt": true}` → full breakdown. Pure calculation from an already-known page count. |
+| POST | `/api/pricing/preview` | Multipart form: optional `document` (PDF) + `acknowledgment_of_receipt`. The backend counts the PDF's pages itself (or treats a missing document as 1 page) and returns the same breakdown. This is what the send-letter wizard calls live as the sender uploads a file or toggles AR — the frontend never determines the page count or price itself. |
+
+Both return:
+```json
+{
+  "page_count": 20,
+  "estimated_weight_g": 100,
+  "weight_bracket": "20-100g",
+  "base_postage": "1.200",
+  "registered_fee": "3.000",
+  "acknowledgment_of_receipt": true,
+  "acknowledgment_fee": "2.500",
+  "total": "6.700",
+  "currency": "TND"
+}
+```
+
+**Pricing is authoritative on the backend only.** `POST /api/letters` has no `price`/`total_amount`/
+`page_count` field — anything sent under those names by a client is simply ignored (there is no
+parameter to bind it to). The backend always re-derives the page count from the actual uploaded
+PDF bytes and recomputes the price via `pricing_service.calculate_price()`. See
+`docs/database.md` for how the result is stored as an immutable snapshot.
 
 ## Public — Tracking & Recipient Access
 

@@ -48,7 +48,14 @@ export interface LetterRead {
   message: string | null
   content_type: ContentType
   status: LetterStatus
-  price: number
+  page_count: number
+  estimated_weight_g: number
+  weight_bracket: string
+  base_postage: number
+  registered_fee: number
+  acknowledgment_of_receipt: boolean
+  acknowledgment_fee: number
+  total_amount: number
   currency: string
   created_at: string
   updated_at: string
@@ -64,7 +71,7 @@ export interface LetterSummary {
   recipient_last_name: string
   subject: string
   status: LetterStatus
-  price: number
+  total_amount: number
   currency: string
   created_at: string
 }
