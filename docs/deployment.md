@@ -38,11 +38,13 @@ pytest -q
 
 ```bash
 docker compose build
-docker compose up -d db
-docker compose run --rm backend alembic upgrade head
-docker compose run --rm backend python -m app.scripts.create_admin
 docker compose up
 ```
+
+`backend/docker-entrypoint.sh` runs `alembic upgrade head` (and bootstraps the first admin, if
+`FIRST_ADMIN_EMAIL`/`FIRST_ADMIN_PASSWORD` are set) automatically before starting Uvicorn, every
+time the container starts. Both are idempotent, so this is safe on every restart -- no separate
+`docker compose run` step needed.
 
 - Backend: http://localhost:8000
 - Frontend: http://localhost:4173
@@ -115,11 +117,12 @@ git push -u origin main
    - `BACKEND_URL` — Render gives you a URL like `https://courrier-plus-backend.onrender.com` once created; fill this in after the first deploy and redeploy
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL` — from your Resend account
    - `FIRST_ADMIN_EMAIL`, `FIRST_ADMIN_PASSWORD` — your choice, used once by the admin bootstrap script
-4. Deploy. Once it's live, open a shell on the Render service (dashboard → **Shell**) and run:
-   ```bash
-   alembic upgrade head
-   python -m app.scripts.create_admin
-   ```
+4. Deploy. `backend/docker-entrypoint.sh` runs `alembic upgrade head` and bootstraps the first
+   admin (from `FIRST_ADMIN_EMAIL`/`FIRST_ADMIN_PASSWORD`) automatically on container startup --
+   no manual step needed. This matters because **Render's free plan doesn't include Shell access**
+   (that's a paid-plan feature), so there'd otherwise be no way to run one-off commands. Check the
+   **Logs** tab to confirm you see `Running database migrations...` followed by a successful
+   Uvicorn startup line.
 5. **Free tier caveat**: a free Render web service spins down after 15 minutes of inactivity: the
    first request after a pause takes ~30-60s to wake it up. Fine for a prototype/demo, not for
    production traffic expecting instant responses.

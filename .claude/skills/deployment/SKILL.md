@@ -30,6 +30,12 @@ deployment-related env vars.
   if that becomes worth it.
 - `render.yaml` lists every env var with `sync: false` for anything secret (Render prompts for it
   in the dashboard instead of storing it in the repo) — never put a real secret value in `render.yaml`.
+- `backend/docker-entrypoint.sh` runs `alembic upgrade head` (and, if `FIRST_ADMIN_EMAIL`/
+  `FIRST_ADMIN_PASSWORD` are set, the admin bootstrap script) before starting Uvicorn, on every
+  container start. Both are idempotent, so this is safe to run repeatedly. This exists specifically
+  because **Render's free plan has no Shell access** (paid-plan feature) — there would otherwise be
+  no way to run one-off commands against the production database. Keep this pattern (auto-run
+  idempotent startup tasks in the entrypoint) rather than assuming shell access will be available.
 
 ## Important rules
 - Never commit a real `.env`; `docker-compose.yml` references `.env` via `env_file` and ships a matching `.env.example`.
@@ -39,12 +45,11 @@ deployment-related env vars.
 
 ## Workflow (local, Docker Compose)
 1. `docker compose build`
-2. `docker compose up -d db` then run migrations (`docker compose run backend alembic upgrade head`)
-3. `docker compose up`
+2. `docker compose up` — the entrypoint runs migrations automatically once `db` is healthy.
 
 ## Workflow (production)
 1. Push to GitHub.
 2. Neon: create project, copy `DATABASE_URL`.
-3. Render: New Blueprint from the repo (reads `render.yaml`), fill in the `sync: false` env vars, deploy, then run `alembic upgrade head` and `python -m app.scripts.create_admin` from the Render shell.
+3. Render: New Blueprint from the repo (reads `render.yaml`), fill in the `sync: false` env vars, deploy. The entrypoint handles migrations + admin bootstrap automatically — check the Logs tab to confirm.
 4. Cloudflare Pages: connect the repo, root directory `frontend`, build `npm run build`, output `dist`, set `VITE_API_URL` to the Render URL.
 5. Set `FRONTEND_URL` on Render to the Pages URL and redeploy.

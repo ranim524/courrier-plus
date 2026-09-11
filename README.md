@@ -143,11 +143,13 @@ interface.
 
 ```bash
 docker compose build
-docker compose up -d db
-docker compose run --rm backend alembic upgrade head
-docker compose run --rm backend python -m app.scripts.create_admin
 docker compose up
 ```
+The backend's entrypoint (`backend/docker-entrypoint.sh`) runs `alembic upgrade head` and, if
+`FIRST_ADMIN_EMAIL`/`FIRST_ADMIN_PASSWORD` are set, bootstraps the first admin automatically on
+every container start — no separate `docker compose run` step needed (safe to run repeatedly:
+migrations no-op once applied, admin bootstrap no-ops once the account exists).
+
 See [`docs/deployment.md`](docs/deployment.md) for details. Docker is optional — the app runs
 fully locally without it.
 
