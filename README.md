@@ -67,6 +67,9 @@ uvicorn app.main:app --reload
 ```
 Backend runs at http://localhost:8000 (interactive docs at `/docs`).
 
+To change an existing admin's password later: `python -m app.scripts.change_admin_password <email>`
+(prompts for the new password interactively — never pass it as a command-line argument).
+
 ### 3. Frontend
 ```bash
 cd frontend

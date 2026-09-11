@@ -27,6 +27,9 @@ claimed or implemented here.
   dependency.
 - The first admin is created via `python -m app.scripts.create_admin`, reading credentials from
   environment variables — never hard-coded.
+- An existing admin's password is changed via `python -m app.scripts.change_admin_password <email>`,
+  which prompts for the new password interactively (hidden input, via `getpass`) — never as a
+  command-line argument (would leak into shell history) and never logged.
 
 ### File uploads
 - Only `application/pdf` is accepted, checked by extension, declared MIME type, **and** the
