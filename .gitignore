@@ -19,6 +19,7 @@ node_modules/
 dist/
 build/
 .vite/
+.wrangler/
 
 # Uploads (dev file storage)
 backend/uploads/*

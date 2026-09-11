@@ -11,7 +11,7 @@ const STEPS = [
   },
   {
     title: "3. Suivi en temps réel",
-    text: "Votre destinataire reçoit un lien sécurisé par e-mail ; vous suivez chaque étape jusqu'à la confirmation de réception.",
+    text: "Votre destinataire reçoit un lien sécurisé par e-mail, vous suivez chaque étape jusqu'à la confirmation de réception.",
   },
 ]
 
