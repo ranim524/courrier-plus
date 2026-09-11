@@ -20,6 +20,7 @@ export interface DashboardStats {
   deliveries_assigned: number
   deliveries_in_transit: number
   deliveries_out_for_delivery: number
+  deliveries_deposited: number
   deliveries_delivered: number
   deliveries_failed: number
   deliveries_returned: number

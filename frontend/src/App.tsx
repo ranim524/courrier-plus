@@ -4,6 +4,7 @@ import { AuthProvider } from "./hooks/useAuth"
 import { SendLetterWizardProvider } from "./hooks/useSendLetterWizard"
 import { AdminLayout } from "./layouts/AdminLayout"
 import { PublicLayout } from "./layouts/PublicLayout"
+import { ConfirmDelivery } from "./pages/ConfirmDelivery"
 import { Home } from "./pages/Home"
 import { TrackResult } from "./pages/TrackResult"
 import { TrackSearch } from "./pages/TrackSearch"
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/send/success" element={<SuccessStep />} />
             <Route path="/track" element={<TrackSearch />} />
             <Route path="/track/:reference" element={<TrackResult />} />
+            <Route path="/confirm-delivery/:token" element={<ConfirmDelivery />} />
           </Route>
 
           <Route path="/admin/login" element={<AdminLogin />} />

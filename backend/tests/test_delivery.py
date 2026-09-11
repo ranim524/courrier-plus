@@ -71,19 +71,40 @@ def test_full_delivery_workflow(client, db_session):
     order = delivery_service.mark_out_for_delivery(db_session, order.id, admin)
     assert order.status == DeliveryStatus.OUT_FOR_DELIVERY
 
-    order = delivery_service.confirm_delivery(db_session, order.id, admin)
+    order = delivery_service.mark_deposited(db_session, order.id, admin)
+    assert order.status == DeliveryStatus.DEPOSITED
+    assert order.deposited_at is not None
+    assert order.confirmation_token_hash is not None
+    assert order.proof is None  # not delivered yet -- only deposited
+
+    order = delivery_service.force_confirm_delivery(db_session, order.id, admin)
     assert order.status == DeliveryStatus.DELIVERED
     assert order.delivered_at is not None
+    assert order.confirmation_token_hash is None  # single-use, invalidated
     assert order.proof is not None
-    assert order.proof.delivered_by == "admin@courrierplus.tn"
+    assert "admin@courrierplus.tn" in order.proof.delivered_by
 
 
 def test_invalid_transition_is_rejected(client, db_session):
     letter_id, order = _create_sent_letter(client, db_session)
     admin = FakeAdmin()
-    # Cannot confirm delivery straight from READY_FOR_DISPATCH.
+    # Cannot force-confirm straight from READY_FOR_DISPATCH -- DEPOSITED first.
     with pytest.raises(ConflictError):
-        delivery_service.confirm_delivery(db_session, order.id, admin)
+        delivery_service.force_confirm_delivery(db_session, order.id, admin)
+
+
+def test_deposited_required_before_delivered(client, db_session):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent = _create_agent(db_session)
+    admin = FakeAdmin()
+
+    delivery_service.assign_courier(db_session, order.id, agent.id, admin)
+    delivery_service.mark_picked_up(db_session, order.id, admin)
+    delivery_service.mark_in_transit(db_session, order.id, admin)
+    order = delivery_service.mark_out_for_delivery(db_session, order.id, admin)
+
+    with pytest.raises(ConflictError):
+        delivery_service.force_confirm_delivery(db_session, order.id, admin)
 
 
 def test_delivered_is_terminal_no_backward_transition(client, db_session):
@@ -95,10 +116,27 @@ def test_delivered_is_terminal_no_backward_transition(client, db_session):
     delivery_service.mark_picked_up(db_session, order.id, admin)
     delivery_service.mark_in_transit(db_session, order.id, admin)
     delivery_service.mark_out_for_delivery(db_session, order.id, admin)
-    delivery_service.confirm_delivery(db_session, order.id, admin)
+    delivery_service.mark_deposited(db_session, order.id, admin)
+    delivery_service.force_confirm_delivery(db_session, order.id, admin)
 
     with pytest.raises(ConflictError):
         delivery_service.mark_in_transit(db_session, order.id, admin)
+
+
+def test_force_confirm_is_idempotent(client, db_session):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent = _create_agent(db_session)
+    admin = FakeAdmin()
+
+    delivery_service.assign_courier(db_session, order.id, agent.id, admin)
+    delivery_service.mark_picked_up(db_session, order.id, admin)
+    delivery_service.mark_in_transit(db_session, order.id, admin)
+    delivery_service.mark_out_for_delivery(db_session, order.id, admin)
+    delivery_service.mark_deposited(db_session, order.id, admin)
+
+    first = delivery_service.force_confirm_delivery(db_session, order.id, admin)
+    second = delivery_service.force_confirm_delivery(db_session, order.id, admin)
+    assert first.delivered_at == second.delivered_at
 
 
 def test_delivery_failure_and_retry(client, db_session):
@@ -122,7 +160,8 @@ def test_delivery_failure_and_retry(client, db_session):
     order = delivery_service.retry_delivery(db_session, order.id, admin)
     assert order.status == DeliveryStatus.OUT_FOR_DELIVERY
 
-    order = delivery_service.confirm_delivery(db_session, order.id, admin)
+    delivery_service.mark_deposited(db_session, order.id, admin)
+    order = delivery_service.force_confirm_delivery(db_session, order.id, admin)
     assert order.status == DeliveryStatus.DELIVERED
 
 
@@ -159,7 +198,8 @@ def test_letter_status_updates_to_delivered(client, db_session, auth_headers):
     delivery_service.mark_picked_up(db_session, order.id, admin)
     delivery_service.mark_in_transit(db_session, order.id, admin)
     delivery_service.mark_out_for_delivery(db_session, order.id, admin)
-    delivery_service.confirm_delivery(db_session, order.id, admin)
+    delivery_service.mark_deposited(db_session, order.id, admin)
+    delivery_service.force_confirm_delivery(db_session, order.id, admin)
 
     letter = client.get(f"/api/admin/letters/{letter_id}", headers=auth_headers).json()
     assert letter["status"] == "DELIVERED"

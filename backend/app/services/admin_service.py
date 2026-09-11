@@ -63,6 +63,7 @@ def get_dashboard_stats(db: Session) -> DashboardStats:
         deliveries_assigned=delivery_repository.count_by_status(db, DeliveryStatus.ASSIGNED),
         deliveries_in_transit=delivery_repository.count_by_status(db, DeliveryStatus.IN_TRANSIT),
         deliveries_out_for_delivery=delivery_repository.count_by_status(db, DeliveryStatus.OUT_FOR_DELIVERY),
+        deliveries_deposited=delivery_repository.count_by_status(db, DeliveryStatus.DEPOSITED),
         deliveries_delivered=delivery_repository.count_by_status(db, DeliveryStatus.DELIVERED),
         deliveries_failed=delivery_repository.count_by_status(db, DeliveryStatus.DELIVERY_FAILED),
         deliveries_returned=delivery_repository.count_by_status(db, DeliveryStatus.RETURNED_TO_SENDER),

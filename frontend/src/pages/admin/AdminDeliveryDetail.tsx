@@ -9,9 +9,10 @@ import { extractErrorMessage } from "../../services/apiClient"
 import {
   assignCourier,
   cancelDelivery,
-  confirmDelivery,
+  forceConfirmDelivery,
   getDelivery,
   listAgents,
+  markDeposited,
   markFailed,
   markInTransit,
   markOutForDelivery,
@@ -35,7 +36,8 @@ const TIMELINE_STEPS: { key: keyof DeliveryOrderRead; label: string }[] = [
   { key: "picked_up_at", label: "Prise en charge" },
   { key: "in_transit_at", label: "En transit" },
   { key: "out_for_delivery_at", label: "En cours de livraison" },
-  { key: "delivered_at", label: "Livrée" },
+  { key: "deposited_at", label: "Déposée dans la boîte aux lettres" },
+  { key: "delivered_at", label: "Réception confirmée" },
 ]
 
 export function AdminDeliveryDetail() {
@@ -47,7 +49,8 @@ export function AdminDeliveryDetail() {
 
   const [showAssign, setShowAssign] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState("")
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [showDeposit, setShowDeposit] = useState(false)
+  const [showForceConfirm, setShowForceConfirm] = useState(false)
   const [showFail, setShowFail] = useState(false)
   const [failReason, setFailReason] = useState<DeliveryFailureReason>("RECIPIENT_UNAVAILABLE")
   const [failNotes, setFailNotes] = useState("")
@@ -188,11 +191,21 @@ export function AdminDeliveryDetail() {
             )}
             {d.status === "OUT_FOR_DELIVERY" && (
               <>
-                <Button onClick={() => setShowConfirm(true)} disabled={busy}>
-                  Confirmer la livraison
+                <Button onClick={() => setShowDeposit(true)} disabled={busy}>
+                  Marquer comme déposée
                 </Button>
                 <Button variant="danger" onClick={() => setShowFail(true)} disabled={busy}>
                   Marquer comme échouée
+                </Button>
+              </>
+            )}
+            {d.status === "DEPOSITED" && (
+              <>
+                <p className="w-full text-sm text-slate-500">
+                  En attente que le destinataire confirme la réception via le lien qui lui a été envoyé par e-mail.
+                </p>
+                <Button variant="secondary" onClick={() => setShowForceConfirm(true)} disabled={busy}>
+                  Forcer la confirmation (destinataire injoignable)
                 </Button>
               </>
             )}
@@ -245,22 +258,46 @@ export function AdminDeliveryDetail() {
         </ConfirmDialog>
       )}
 
-      {showConfirm && (
+      {showDeposit && (
         <ConfirmDialog
-          title="Confirmer la livraison physique ?"
+          title="Marquer le courrier comme déposé ?"
           description={
             <>
-              Cette action signifie que le courrier papier a réellement été remis au destinataire.
+              Cette action signifie que le courrier papier a réellement été placé dans la boîte aux lettres du
+              destinataire.
               <br />
               <br />
-              Cette confirmation déclenchera les notifications de livraison.
+              Un e-mail sera envoyé au destinataire lui demandant de confirmer la réception. L'expéditeur ne sera
+              informé qu'après cette confirmation.
             </>
           }
-          confirmLabel="Confirmer la livraison"
+          confirmLabel="Marquer comme déposée"
           isLoading={busy}
-          onCancel={() => setShowConfirm(false)}
+          onCancel={() => setShowDeposit(false)}
           onConfirm={() => {
-            runAction(() => confirmDelivery(d.id)).then(() => setShowConfirm(false))
+            runAction(() => markDeposited(d.id)).then(() => setShowDeposit(false))
+          }}
+        />
+      )}
+
+      {showForceConfirm && (
+        <ConfirmDialog
+          title="Forcer la confirmation de réception ?"
+          description={
+            <>
+              À utiliser uniquement si le destinataire ne peut pas confirmer lui-même (lien perdu, e-mail non reçu...).
+              <br />
+              <br />
+              Cette action déclenchera la notification de livraison à l'expéditeur, comme si le destinataire avait
+              confirmé.
+            </>
+          }
+          confirmLabel="Forcer la confirmation"
+          danger
+          isLoading={busy}
+          onCancel={() => setShowForceConfirm(false)}
+          onConfirm={() => {
+            runAction(() => forceConfirmDelivery(d.id)).then(() => setShowForceConfirm(false))
           }}
         />
       )}

@@ -89,9 +89,16 @@ class DeliveryOrder(UUIDPKMixin, TimestampMixin, Base):
     picked_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     in_transit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     out_for_delivery_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deposited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Single-use hashed token for the recipient's "confirm receipt" link, set
+    # by mark_deposited() and cleared the moment the delivery reaches
+    # DELIVERED -- never the raw token (same convention as password/access
+    # token hashing elsewhere, see app/core/security.py).
+    confirmation_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
 
     letter = relationship("Letter", back_populates="delivery_order")
     provider = relationship("DeliveryProvider", back_populates="orders")
@@ -124,8 +131,8 @@ class DeliveryAttempt(UUIDPKMixin, TimestampMixin, Base):
 
 class ProofOfDelivery(UUIDPKMixin, TimestampMixin, Base):
     """Created exactly once, when a DeliveryOrder reaches DELIVERED (see
-    delivery_service.confirm_delivery, which is idempotent and never creates
-    a second one). proof_type is MANUAL_CONFIRMATION for the current
+    delivery_service._finalize_delivery, which is idempotent and never
+    creates a second one). proof_type is MANUAL_CONFIRMATION for the current
     prototype -- the model is shaped to support SIGNATURE/OTP/PHOTO later
     without a schema change, but never claim a proof type that wasn't
     actually captured."""

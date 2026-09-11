@@ -4,13 +4,16 @@ Owns the DeliveryOrder state machine (see delivery_state.py) and is the only
 place that:
   - creates a DeliveryOrder (called once, right after a Letter reaches SENT)
   - moves it through CREATED -> READY_FOR_DISPATCH -> ASSIGNED -> PICKED_UP
-    -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED (or the failure/return path)
-  - creates the ProofOfDelivery and sends the two delivery-confirmed emails,
-    exactly once, only when the physical letter is actually confirmed
-    DELIVERED -- never on any earlier status (see confirm_delivery below).
+    -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DEPOSITED -> DELIVERED (or the
+    failure/return path)
+  - creates the ProofOfDelivery and sends the sender's delivery-confirmed
+    email, exactly once, only once the recipient (or an admin, as a
+    fallback) confirms the letter was actually received -- never on any
+    earlier status (see mark_deposited / confirm_delivery_by_recipient /
+    force_confirm_delivery below).
 
-All admin-triggered actions go through here; routes/delivery.py never
-mutates a DeliveryOrder directly.
+All admin-triggered actions go through here; routes/delivery.py and
+routes/delivery_webhook.py never mutate a DeliveryOrder directly.
 """
 
 from datetime import datetime, timezone
@@ -19,6 +22,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.security import generate_secure_token, hash_token
 from app.models.admin import Admin
 from app.models.delivery import DeliveryAttempt, DeliveryOrder, ProofOfDelivery
 from app.models.enums import ActorType, DeliveryFailureReason, DeliveryStatus, LetterEventType, LetterStatus
@@ -122,26 +126,87 @@ def mark_out_for_delivery(db: Session, delivery_id: UUID, admin: Admin) -> Deliv
     return order
 
 
-def confirm_delivery(
-    db: Session, delivery_id: UUID, admin: Admin, notes: str | None = None
-) -> DeliveryOrder:
-    """The only path that can trigger the final "delivered" notifications.
-    Idempotent: confirming an already-DELIVERED order is a pure no-op --
-    no duplicate ProofOfDelivery, event, or email (spec section 24/46)."""
+def mark_deposited(db: Session, delivery_id: UUID, admin: Admin | None = None) -> DeliveryOrder:
+    """The letter was physically placed in the recipient's mailbox. Called
+    either by an admin (manual/internal provider, phase 1 -- Admin >
+    Livraisons) or by an external carrier's own platform via a webhook (see
+    routes/delivery_webhook.py, admin=None there). Not the final word yet:
+    generates a single-use confirmation token and emails the recipient
+    asking them to confirm receipt -- the only digital touchpoint they ever
+    get, and it never exposes the letter's content (just a reference and a
+    confirm button)."""
     order = get_delivery_or_404(db, delivery_id)
+    delivery_state.transition(order, DeliveryStatus.DEPOSITED)
+    order.deposited_at = datetime.now(timezone.utc)
+    _record(db, order, LetterEventType.DELIVERY_DEPOSITED, admin)
 
+    raw_token = generate_secure_token()
+    order.confirmation_token_hash = hash_token(raw_token)
+    db.flush()
+
+    letter = order.letter
+    confirm_url = f"{_frontend_url()}/confirm-delivery/{raw_token}"
+    email_service.send_delivery_confirmation_request(
+        db, letter.id, letter.recipient_email, letter.reference or "", confirm_url
+    )
+
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+def mark_deposited_by_tracking_number(db: Session, provider_code: str, tracking_number: str) -> DeliveryOrder:
+    """Entry point for routes/delivery_webhook.py -- an external carrier's
+    platform identifies the delivery by tracking number (it never sees our
+    internal DeliveryOrder UUID), scoped to its own provider so one carrier
+    can never report on another's deliveries."""
+    provider = delivery_provider_repository.get_by_code(db, provider_code)
+    if provider is None:
+        raise NotFoundError("Unknown delivery provider")
+
+    order = delivery_repository.get_by_tracking_number(db, tracking_number)
+    if order is None or order.provider_id != provider.id:
+        raise NotFoundError("Delivery not found for this provider")
+
+    return mark_deposited(db, order.id, admin=None)
+
+
+def get_by_confirmation_token(db: Session, raw_token: str) -> DeliveryOrder | None:
+    return delivery_repository.get_by_confirmation_token_hash(db, hash_token(raw_token))
+
+
+def get_confirmation_view(db: Session, raw_token: str) -> DeliveryOrder:
+    order = get_by_confirmation_token(db, raw_token)
+    if order is None:
+        raise NotFoundError("Ce lien de confirmation n'est plus valide")
+    return order
+
+
+def _finalize_delivery(
+    db: Session,
+    order: DeliveryOrder,
+    delivered_by: str,
+    delivery_method: str,
+    admin: Admin | None,
+    notes: str | None = None,
+) -> DeliveryOrder:
+    """Shared by confirm_delivery_by_recipient and force_confirm_delivery --
+    the only two paths that can produce the final "delivered" state.
+    Idempotent: confirming an already-DELIVERED order is a pure no-op -- no
+    duplicate ProofOfDelivery, event, or email (spec section 24/46)."""
     if order.status == DeliveryStatus.DELIVERED:
         return order
 
     delivery_state.transition(order, DeliveryStatus.DELIVERED)
     delivered_at = datetime.now(timezone.utc)
     order.delivered_at = delivered_at
+    order.confirmation_token_hash = None  # single-use: invalidate immediately
 
     proof = ProofOfDelivery(
         delivery_id=order.id,
         delivered_at=delivered_at,
-        delivered_by=admin.email,
-        delivery_method="Livraison en main propre",
+        delivered_by=delivered_by,
+        delivery_method=delivery_method,
         notes=notes,
     )
     delivery_repository.create_proof(db, proof)
@@ -149,12 +214,11 @@ def confirm_delivery(
     db.flush()
 
     letter = order.letter
-    # The recipient has no digital way to confirm receipt anymore, so this
-    # physical confirmation is the only source of truth: it lands on
-    # RECEIVED when the sender paid for an acknowledgment of receipt (this
-    # ProofOfDelivery *is* that accusé de réception), DELIVERED otherwise.
-    # Guarded on SENT so a repeated confirm_delivery call (idempotency,
-    # above) never re-transitions the letter.
+    # The recipient has no other digital way to confirm receipt, so this
+    # confirmation is the only source of truth: it lands on RECEIVED when
+    # the sender paid for an acknowledgment of receipt (this ProofOfDelivery
+    # *is* that accusé de réception), DELIVERED otherwise. Guarded on SENT
+    # so a repeated call (idempotency, above) never re-transitions the letter.
     if letter.status == LetterStatus.SENT:
         target_status = LetterStatus.RECEIVED if letter.acknowledgment_of_receipt else LetterStatus.DELIVERED
         letter_state.transition(letter, target_status)
@@ -163,9 +227,8 @@ def confirm_delivery(
     delivered_time = delivered_at.strftime("%H:%M")
     reference = letter.reference or ""
 
-    email_service.send_delivery_confirmed_recipient(
-        db, letter.id, letter.recipient_email, reference, order.tracking_number, delivered_date, delivered_time
-    )
+    # Only the sender is emailed here -- the recipient already acted (or an
+    # admin acted on their behalf); telling them again would be redundant.
     email_service.send_delivery_confirmed_sender(
         db,
         letter.id,
@@ -181,6 +244,35 @@ def confirm_delivery(
     db.commit()
     db.refresh(order)
     return order
+
+
+def confirm_delivery_by_recipient(db: Session, raw_token: str) -> DeliveryOrder:
+    """The recipient clicked the confirmation link from the deposit email."""
+    order = get_by_confirmation_token(db, raw_token)
+    if order is None:
+        raise NotFoundError("Ce lien de confirmation n'est plus valide")
+    return _finalize_delivery(
+        db,
+        order,
+        delivered_by=order.letter.recipient_email,
+        delivery_method="Confirmation par le destinataire",
+        admin=None,
+    )
+
+
+def force_confirm_delivery(db: Session, delivery_id: UUID, admin: Admin, notes: str | None = None) -> DeliveryOrder:
+    """Admin fallback for when the recipient never confirms (forgotten
+    email, spam folder, etc.) -- only reachable from DEPOSITED, same as the
+    recipient's own path, so it never skips the deposit step."""
+    order = get_delivery_or_404(db, delivery_id)
+    return _finalize_delivery(
+        db,
+        order,
+        delivered_by=f"Confirmation manuelle par l'administrateur ({admin.email})",
+        delivery_method="Confirmation forcée par l'administrateur",
+        admin=admin,
+        notes=notes,
+    )
 
 
 def mark_failed(
@@ -234,10 +326,14 @@ def cancel_delivery(db: Session, delivery_id: UUID, admin: Admin) -> DeliveryOrd
     return order
 
 
-def _tracking_url(reference: str) -> str:
+def _frontend_url() -> str:
     from app.core.config import get_settings
 
-    return f"{get_settings().frontend_url}/track/{reference}"
+    return get_settings().frontend_url
+
+
+def _tracking_url(reference: str) -> str:
+    return f"{_frontend_url()}/track/{reference}"
 
 
 def to_summary(order: DeliveryOrder):
@@ -273,6 +369,7 @@ def to_read(order: DeliveryOrder):
         picked_up_at=order.picked_up_at,
         in_transit_at=order.in_transit_at,
         out_for_delivery_at=order.out_for_delivery_at,
+        deposited_at=order.deposited_at,
         delivered_at=order.delivered_at,
         failed_at=order.failed_at,
         returned_at=order.returned_at,
@@ -288,7 +385,8 @@ _PUBLIC_EVENT_LABELS: list[tuple[str, str]] = [
     ("picked_up_at", "Prise en charge"),
     ("in_transit_at", "En transit"),
     ("out_for_delivery_at", "En cours de livraison"),
-    ("delivered_at", "Livrée"),
+    ("deposited_at", "Déposée dans la boîte aux lettres"),
+    ("delivered_at", "Réception confirmée"),
 ]
 
 

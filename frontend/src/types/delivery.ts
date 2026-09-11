@@ -5,6 +5,7 @@ export type DeliveryStatus =
   | "PICKED_UP"
   | "IN_TRANSIT"
   | "OUT_FOR_DELIVERY"
+  | "DEPOSITED"
   | "DELIVERED"
   | "DELIVERY_FAILED"
   | "RETURNED_TO_SENDER"
@@ -81,6 +82,7 @@ export interface DeliveryOrderRead {
   picked_up_at: string | null
   in_transit_at: string | null
   out_for_delivery_at: string | null
+  deposited_at: string | null
   delivered_at: string | null
   failed_at: string | null
   returned_at: string | null
@@ -98,4 +100,12 @@ export interface DeliveryPublicView {
   tracking_number: string
   status: DeliveryStatus
   events: DeliveryPublicEvent[]
+}
+
+export interface DeliveryConfirmationView {
+  reference: string
+  tracking_number: string
+  sender_first_name: string
+  sender_last_name: string
+  confirmed: boolean
 }

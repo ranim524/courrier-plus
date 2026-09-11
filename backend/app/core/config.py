@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     r2_secret_access_key: str = ""
     r2_bucket_name: str = ""
 
+    # Shared secret an external delivery carrier's own platform must send
+    # (X-Webhook-Secret header) to report a delivery event to ours -- see
+    # app/routes/delivery_webhook.py. Empty means no external carrier is
+    # configured yet, so the webhook rejects every request.
+    delivery_webhook_secret: str = ""
+
     @property
     def r2_endpoint_url(self) -> str:
         return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"

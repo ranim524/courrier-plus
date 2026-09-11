@@ -52,21 +52,28 @@ POST /api/payments/mock/confirm (success) → idempotent:
    Email sent: payment confirmation (sender only)
    │
    ▼
-ADMIN runs the physical delivery through to DELIVERED (Admin → Livraisons)
+ADMIN runs the physical delivery through to OUT_FOR_DELIVERY, then DEPOSITED
+   (courier placed the letter in the mailbox -- Admin → Livraisons, or an
+   external carrier's own platform via a webhook, see below)
    │
    ▼
-delivery_service.confirm_delivery() → Letter → RECEIVED (if acknowledgment of
-   receipt was requested) or DELIVERED (otherwise) — the only transition out
-   of SENT. DELIVERY_CONFIRMED_RECIPIENT + DELIVERY_CONFIRMED_SENDER emails sent.
+delivery_service.mark_deposited() → single-use confirmation link emailed to
+   the recipient. Sender still gets nothing.
+   │
+   ▼
+RECIPIENT clicks the link (POST /api/delivery-confirmation/{token}/confirm)
+   -- or an admin force-confirms if the recipient never responds
+   │
+   ▼
+delivery_service._finalize_delivery() → Letter → RECEIVED (if acknowledgment
+   of receipt was requested) or DELIVERED (otherwise) — the only transition
+   out of SENT. DELIVERY_CONFIRMED_SENDER email sent (sender only).
 ```
 
-**The recipient never gets an email or any digital access to the letter's content.** There is no
-secure link, no online view, no digital "open"/"confirm receipt" action — the only thing that ever
-reaches the recipient is the physical letter itself, and the only notification either side gets is
-the delivery-confirmed email once an admin confirms the physical delivery
-(`app/services/delivery_service.py::confirm_delivery`). Every transition is explicit and validated
-by `app/services/letter_state.py` — an invalid jump is rejected with HTTP 409, never silently
-allowed.
+**The recipient never gets any digital access to the letter's content**, and gets exactly one email
+before the process above (the confirmation-request link) — no secure link to view the subject,
+message, or PDF, no "open" action. Every transition is explicit and validated by
+`app/services/letter_state.py` — an invalid jump is rejected with HTTP 409, never silently allowed.
 
 ## Pricing model
 
@@ -130,51 +137,70 @@ Letter (SENT)
 DeliveryOrder (CREATED -> READY_FOR_DISPATCH)
    │  admin actions, app/services/delivery_service.py
    ▼
-ASSIGNED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED
-   │                                         │
-   │                                         ▼
-   │                                  DELIVERY_FAILED -> RETURNED_TO_SENDER
-   ▼                                         │
-ProofOfDelivery                    (or back to OUT_FOR_DELIVERY for a retry)
-   │
-   ▼
-DELIVERY_CONFIRMED_RECIPIENT / DELIVERY_CONFIRMED_SENDER emails
+ASSIGNED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DEPOSITED
+   │                                         │                 │
+   │                                         ▼                 ▼
+   │                                  DELIVERY_FAILED    confirmation-request
+   │                                   -> RETURNED_TO_SENDER    email to recipient
+   ▼                                   (or retry: back to               │
+  (cancel from an early status)         OUT_FOR_DELIVERY)                ▼
+                                                            recipient confirms
+                                                          (or admin force-confirms)
+                                                                     │
+                                                                     ▼
+                                                                 DELIVERED
+                                                              ProofOfDelivery
+                                                         DELIVERY_CONFIRMED_SENDER
 ```
 
+- **Deposit and confirmation are two separate steps, not one.** `mark_deposited()` (called by an
+  admin for the manual/internal provider, or an external carrier's own platform via
+  `POST /api/webhooks/delivery/deposited`) only means the letter was physically placed in the
+  mailbox — it does **not** notify the sender. It emails the recipient a single-use confirmation
+  link; only once they click it (`confirm_delivery_by_recipient`), or an admin uses the
+  `force-confirm` fallback if they never respond, does the delivery reach `DELIVERED` and the
+  sender get notified. Both paths share the same idempotent `_finalize_delivery()` internals.
 - **Two linked, not duplicated, state machines.** `DeliveryOrder.status` (`DeliveryStatus`) holds the
   detailed physical-delivery state; `Letter.status` only reflects the high-level outcome, moving
   from `SENT` straight to `DELIVERED` or `RECEIVED` (if the paid acknowledgment-of-receipt option
-  was requested — this `ProofOfDelivery` *is* that accusé de réception) once
-  `DeliveryOrder.confirm_delivery()` runs. `SENT` never means delivered on its own — only a
-  confirmed `DeliveryOrder.DELIVERED` can move the letter there. There is no separate digital
-  "opened" state: the recipient has no online access to react to in the first place.
-- **Only `DELIVERED` triggers the "your letter was delivered" emails.** No earlier status
-  (`ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) sends anything to the recipient/sender.
-  `delivery_service.confirm_delivery()` is the single, idempotent entry point that creates the
-  `ProofOfDelivery` and sends both emails exactly once.
+  was requested — this `ProofOfDelivery` *is* that accusé de réception) once the delivery is
+  finalized. `SENT` never means delivered on its own.
+- **The recipient's one and only digital touchpoint is the confirmation link**, and it never shows
+  letter content — just enough to recognize which letter this is about (reference, sender name).
+  No earlier status (`ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) sends anything to
+  the recipient/sender, and the confirmation token is cleared the moment it's used — reusing it
+  (double-submit, stale tab) 404s rather than duplicating anything.
 - **Provider abstraction** (`app/services/delivery/`): `BaseDeliveryProvider` with
-  `ManualDeliveryProvider` (phase 1 — no external API, every status change is a direct admin
-  action) as the only implementation today, selected by `DeliveryProvider.code`. A real carrier is
-  a new provider class + DB row later, with no change to `delivery_service.py` or the admin routes
-  above it. The UI labels this "suivi manuel" — it never implies real-time carrier tracking that
-  doesn't exist yet.
+  `ManualDeliveryProvider` (phase 1 — no external API, admin drives every status change through
+  Admin → Livraisons) as the only implementation today, selected by `DeliveryProvider.code`. A real
+  carrier is a new provider class + DB row later, reporting deposits through the webhook above
+  instead of the admin action — no change to `delivery_service.py`'s core logic. The UI labels the
+  manual provider "suivi manuel" — it never implies real-time carrier tracking that doesn't exist yet.
+- **Webhook authentication** (`app/routes/delivery_webhook.py`): a single shared secret
+  (`DELIVERY_WEBHOOK_SECRET` env var, compared with `hmac.compare_digest`), not a per-provider DB
+  credential — consistent with never storing carrier API keys on `DeliveryProvider` rows. An empty
+  configured secret rejects every webhook call rather than silently accepting one.
 - **Audit trail reuses `letter_events`** (no separate `delivery_events` table) — every delivery
   event is already scoped to one letter, so the existing `LetterEventType` enum gained
-  `DELIVERY_CREATED` ... `DELIVERY_CANCELLED` members instead of a parallel table.
+  `DELIVERY_CREATED` ... `DELIVERY_CANCELLED` (including `DELIVERY_DEPOSITED`) instead of a
+  parallel table.
 - **Public tracking view** (`GET /api/track/{reference}`) exposes a `DeliveryPublicView` derived
   only from `DeliveryOrder`'s own timestamp columns — never courier name/phone, admin notes, or
-  internal database IDs. All delivery-mutating endpoints (`/api/admin/deliveries/*`,
-  `/api/admin/delivery-agents/*`) require an admin JWT; there is no sender/recipient-facing route
-  that can change a delivery's status.
+  internal database IDs. All delivery-mutating admin endpoints (`/api/admin/deliveries/*`,
+  `/api/admin/delivery-agents/*`) require an admin JWT; the recipient confirmation route is scoped
+  to a single-use token instead, and the webhook to its shared secret — neither can touch any
+  delivery other than the one they were issued for.
 
 See `.claude/skills/delivery/SKILL.md` and `docs/database.md` for the full schema.
 
 ## Admin vs. public surface
 
 Senders track their letter by its public reference at `/track/{reference}` — no account, no
-secret link. Only administrators have accounts and JWT-based sessions, scoped to `/api/admin/*`.
-The `access_tokens` table and its model/repository remain in the codebase only to keep historical
-audit data readable; nothing creates or reads a new one anymore (see `docs/database.md`).
+secret link. Administrators have accounts and JWT-based sessions, scoped to `/api/admin/*`. The
+recipient's only credential of any kind is the single-use delivery-confirmation token, scoped to
+exactly one delivery and cleared after one use. The `access_tokens` table and its model/repository
+(from the now-removed content-viewing flow) remain in the codebase only to keep historical audit
+data readable; nothing creates or reads a new one anymore (see `docs/database.md`).
 
 ## Legal note
 

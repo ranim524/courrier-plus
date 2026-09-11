@@ -9,7 +9,7 @@ ALLOWED_TRANSITIONS: dict[LetterStatus, set[LetterStatus]] = {
     LetterStatus.PAID: {LetterStatus.SENT, LetterStatus.FAILED},
     # The recipient has no digital access to the letter's content -- the only
     # way forward from SENT is a physically confirmed delivery (see
-    # delivery_service.confirm_delivery), landing on RECEIVED when the paid
+    # delivery_service._finalize_delivery), landing on RECEIVED when the paid
     # acknowledgment-of-receipt option was requested, DELIVERED otherwise.
     LetterStatus.SENT: {LetterStatus.DELIVERED, LetterStatus.RECEIVED, LetterStatus.FAILED},
     LetterStatus.DELIVERED: set(),

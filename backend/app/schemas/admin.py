@@ -40,6 +40,7 @@ class DashboardStats(BaseModel):
     deliveries_assigned: int
     deliveries_in_transit: int
     deliveries_out_for_delivery: int
+    deliveries_deposited: int
     deliveries_delivered: int
     deliveries_failed: int
     deliveries_returned: int

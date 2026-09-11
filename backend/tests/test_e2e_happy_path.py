@@ -55,18 +55,21 @@ def test_full_happy_path(client, db_session, auth_headers):
     delivery_service.mark_picked_up(db_session, order.id, admin)
     delivery_service.mark_in_transit(db_session, order.id, admin)
     delivery_service.mark_out_for_delivery(db_session, order.id, admin)
-    delivery_service.confirm_delivery(db_session, order.id, admin)
+    delivery_service.mark_deposited(db_session, order.id, admin)
+    delivery_service.force_confirm_delivery(db_session, order.id, admin)
 
     # 7. Letter reaches RECEIVED (acknowledgment of receipt was requested) --
     # only once the physical letter was actually confirmed delivered.
     letter = client.get(f"/api/admin/letters/{letter_id}", headers=auth_headers).json()
     assert letter["status"] == "RECEIVED"
 
-    # 8. Exactly one delivery-confirmed email to each side, triggered by the
-    # physical confirmation -- not before.
+    # 8. Recipient got exactly one confirmation-request email when deposited;
+    # sender got exactly one delivery-confirmed email once the admin
+    # force-confirmed (the recipient never gets a second email).
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    assert sum(1 for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_RECIPIENT") == 1
+    assert sum(1 for e in emails if e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST") == 1
     assert sum(1 for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_SENDER") == 1
+    assert not any(e["email_type"] == "DELIVERY_CONFIRMED_RECIPIENT" for e in emails)
 
     # Final tracking view reflects the whole lifecycle
     tracking = client.get(f"/api/track/{reference}").json()

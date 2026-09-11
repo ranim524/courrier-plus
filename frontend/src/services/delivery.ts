@@ -57,8 +57,13 @@ export async function markOutForDelivery(id: string): Promise<DeliveryOrderRead>
   return data
 }
 
-export async function confirmDelivery(id: string, notes?: string): Promise<DeliveryOrderRead> {
-  const { data } = await apiClient.post<DeliveryOrderRead>(`/api/admin/deliveries/${id}/confirm-delivery`, { notes })
+export async function markDeposited(id: string): Promise<DeliveryOrderRead> {
+  const { data } = await apiClient.post<DeliveryOrderRead>(`/api/admin/deliveries/${id}/deposit`)
+  return data
+}
+
+export async function forceConfirmDelivery(id: string, notes?: string): Promise<DeliveryOrderRead> {
+  const { data } = await apiClient.post<DeliveryOrderRead>(`/api/admin/deliveries/${id}/force-confirm`, { notes })
   return data
 }
 

@@ -37,6 +37,11 @@ def get_by_tracking_number(db: Session, tracking_number: str) -> DeliveryOrder |
     return db.execute(stmt).scalar_one_or_none()
 
 
+def get_by_confirmation_token_hash(db: Session, token_hash: str) -> DeliveryOrder | None:
+    stmt = select(DeliveryOrder).where(DeliveryOrder.confirmation_token_hash == token_hash)
+    return db.execute(stmt).scalar_one_or_none()
+
+
 def list_deliveries(
     db: Session,
     page: int,

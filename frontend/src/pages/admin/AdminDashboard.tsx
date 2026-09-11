@@ -21,6 +21,7 @@ const DELIVERY_CARDS: { key: keyof DashboardStats; label: string }[] = [
   { key: "deliveries_assigned", label: "Affectées" },
   { key: "deliveries_in_transit", label: "En transit" },
   { key: "deliveries_out_for_delivery", label: "En cours de livraison" },
+  { key: "deliveries_deposited", label: "Déposées" },
   { key: "deliveries_delivered", label: "Livrées" },
   { key: "deliveries_failed", label: "Échecs" },
   { key: "deliveries_returned", label: "Retournées" },

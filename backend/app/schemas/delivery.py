@@ -95,6 +95,7 @@ class DeliveryOrderRead(BaseModel):
     picked_up_at: datetime | None
     in_transit_at: datetime | None
     out_for_delivery_at: datetime | None
+    deposited_at: datetime | None
     delivered_at: datetime | None
     failed_at: datetime | None
     returned_at: datetime | None
@@ -122,10 +123,31 @@ class DeliveryPublicEvent(BaseModel):
 
 
 class DeliveryPublicView(BaseModel):
-    """Safe subset shown on the public tracking page and the recipient's
-    secure-link view -- no courier personal info, no admin notes, no
-    internal IDs (spec section 27)."""
+    """Safe subset shown on the public tracking page -- no courier personal
+    info, no admin notes, no internal IDs (spec section 27)."""
 
     tracking_number: str
     status: DeliveryStatus
     events: list[DeliveryPublicEvent]
+
+
+class DeliveryConfirmationView(BaseModel):
+    """What the recipient sees at /confirm-delivery/{token} before they
+    confirm -- deliberately minimal: no letter content (subject/message/PDF),
+    just enough to recognize which letter this is about."""
+
+    reference: str
+    tracking_number: str
+    sender_first_name: str
+    sender_last_name: str
+    confirmed: bool = False
+
+
+class DeliveryWebhookRequest(BaseModel):
+    """Payload an external carrier's own platform sends to report that its
+    courier placed the letter in the recipient's mailbox. Authenticated via
+    the X-Webhook-Secret header (app/core/config.py's delivery_webhook_secret),
+    not a field here -- never trust a secret sent in the body."""
+
+    provider_code: str
+    tracking_number: str

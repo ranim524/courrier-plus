@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+from app.core.config import get_settings
 from app.models.enums import DeliveryFailureReason
 from app.repositories import delivery_agent_repository, delivery_provider_repository, delivery_repository
 from app.services import delivery_service
@@ -23,13 +26,29 @@ def _create_agent_via_api(client, auth_headers, db_session):
     return response.json()["id"]
 
 
+def _advance_to_out_for_delivery(client, auth_headers, delivery_id, agent_id):
+    client.post(f"/api/admin/deliveries/{delivery_id}/assign", headers=auth_headers, json={"agent_id": agent_id})
+    client.post(f"/api/admin/deliveries/{delivery_id}/pickup", headers=auth_headers)
+    client.post(f"/api/admin/deliveries/{delivery_id}/in-transit", headers=auth_headers)
+    client.post(f"/api/admin/deliveries/{delivery_id}/out-for-delivery", headers=auth_headers)
+
+
+def _deposit_with_known_token(client, auth_headers, delivery_id, raw_token="test-confirmation-token-123"):
+    with patch("app.services.delivery_service.generate_secure_token", return_value=raw_token):
+        response = client.post(f"/api/admin/deliveries/{delivery_id}/deposit", headers=auth_headers)
+    assert response.status_code == 200
+    return raw_token
+
+
 # ---------------------------------------------------------------------------
-# Section 46: the mandatory critical email test -- no delivery email before
-# DELIVERED, exactly one recipient + one sender email once, none on a repeat.
+# The mandatory critical email test -- no delivery email before DEPOSITED,
+# exactly one confirmation-request to the recipient on deposit, and exactly
+# one delivery-confirmed email to the sender once the recipient confirms --
+# never before, never duplicated.
 # ---------------------------------------------------------------------------
 
 
-def test_no_delivery_email_before_delivered_then_exactly_one_on_confirm(client, db_session, auth_headers):
+def test_no_delivery_email_before_deposited_then_exactly_one_on_recipient_confirm(client, db_session, auth_headers):
     letter_id, order = _create_sent_letter(client, db_session)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
 
@@ -38,47 +57,164 @@ def test_no_delivery_email_before_delivered_then_exactly_one_on_confirm(client, 
     client.post(f"/api/admin/deliveries/{order.id}/in-transit", headers=auth_headers)
 
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    assert not any("DELIVERY_CONFIRMED" in e["email_type"] for e in emails)
+    assert not any("DELIVERY_CONFIRM" in e["email_type"] for e in emails)
 
     client.post(f"/api/admin/deliveries/{order.id}/out-for-delivery", headers=auth_headers)
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    assert not any("DELIVERY_CONFIRMED" in e["email_type"] for e in emails)
+    assert not any("DELIVERY_CONFIRM" in e["email_type"] for e in emails)
 
-    response = client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", headers=auth_headers, json={})
-    assert response.status_code == 200
-    assert response.json()["status"] == "DELIVERED"
+    # Deposited: recipient gets exactly one confirmation REQUEST (not yet a
+    # "delivered" confirmation) -- the sender gets nothing at this point.
+    raw_token = _deposit_with_known_token(client, auth_headers, order.id)
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST"]) == 1
+    assert not any(e["email_type"] in ("DELIVERY_CONFIRMED_RECIPIENT", "DELIVERY_CONFIRMED_SENDER") for e in emails)
+
+    delivery = client.get(f"/api/admin/deliveries/{order.id}", headers=auth_headers).json()
+    assert delivery["status"] == "DEPOSITED"
+
+    # Recipient clicks the confirmation link -- only now is the sender notified.
+    confirm = client.post(f"/api/delivery-confirmation/{raw_token}/confirm")
+    assert confirm.status_code == 200
+    assert confirm.json()["confirmed"] is True
+
+    delivery = client.get(f"/api/admin/deliveries/{order.id}", headers=auth_headers).json()
+    assert delivery["status"] == "DELIVERED"
 
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    recipient_emails = [e for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_RECIPIENT"]
-    sender_emails = [e for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_SENDER"]
-    assert len(recipient_emails) == 1
-    assert len(sender_emails) == 1
+    assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_SENDER"]) == 1
+    # The recipient already acted -- no redundant second email to them.
+    assert not any(e["email_type"] == "DELIVERY_CONFIRMED_RECIPIENT" for e in emails)
 
-    # Confirm again (idempotency) -- no additional emails, no duplicate proof.
-    response2 = client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", headers=auth_headers, json={})
-    assert response2.status_code == 200
+    # The confirmation token is single-use: reusing it must not resend anything.
+    confirm_again = client.post(f"/api/delivery-confirmation/{raw_token}/confirm")
+    assert confirm_again.status_code == 404
 
     emails_after = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    assert len([e for e in emails_after if e["email_type"] == "DELIVERY_CONFIRMED_RECIPIENT"]) == 1
     assert len([e for e in emails_after if e["email_type"] == "DELIVERY_CONFIRMED_SENDER"]) == 1
 
 
-def test_confirm_delivery_idempotent_no_duplicate_proof(client, db_session, auth_headers):
+def test_force_confirm_delivery_idempotent_no_duplicate_proof(client, db_session, auth_headers):
     letter_id, order = _create_sent_letter(client, db_session)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+    client.post(f"/api/admin/deliveries/{order.id}/deposit", headers=auth_headers)
 
-    client.post(f"/api/admin/deliveries/{order.id}/assign", headers=auth_headers, json={"agent_id": agent_id})
-    client.post(f"/api/admin/deliveries/{order.id}/pickup", headers=auth_headers)
-    client.post(f"/api/admin/deliveries/{order.id}/in-transit", headers=auth_headers)
-    client.post(f"/api/admin/deliveries/{order.id}/out-for-delivery", headers=auth_headers)
-
-    first = client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", headers=auth_headers, json={}).json()
-    second = client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", headers=auth_headers, json={}).json()
+    first = client.post(f"/api/admin/deliveries/{order.id}/force-confirm", headers=auth_headers, json={}).json()
+    second = client.post(f"/api/admin/deliveries/{order.id}/force-confirm", headers=auth_headers, json={}).json()
     assert first["delivered_at"] == second["delivered_at"]
 
     events = client.get(f"/api/admin/letters/{letter_id}/events", headers=auth_headers).json()
     delivered_events = [e for e in events if e["event_type"] == "DELIVERY_DELIVERED"]
     assert len(delivered_events) == 1
+
+
+def test_force_confirm_after_recipient_already_confirmed_is_a_no_op(client, db_session, auth_headers):
+    """Admin fallback must never duplicate the sender email if the recipient
+    happened to confirm in the meantime."""
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+    raw_token = _deposit_with_known_token(client, auth_headers, order.id)
+
+    client.post(f"/api/delivery-confirmation/{raw_token}/confirm")
+    client.post(f"/api/admin/deliveries/{order.id}/force-confirm", headers=auth_headers, json={})
+
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_SENDER"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Public delivery-confirmation link (recipient-facing, no content exposed)
+# ---------------------------------------------------------------------------
+
+
+def test_confirmation_view_shows_no_letter_content(client, db_session, auth_headers):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+    raw_token = _deposit_with_known_token(client, auth_headers, order.id)
+
+    response = client.get(f"/api/delivery-confirmation/{raw_token}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reference"]
+    assert body["confirmed"] is False
+    # No message/subject/PDF access -- only enough to recognize the letter.
+    assert "message" not in body
+    assert "subject" not in body
+
+
+def test_confirmation_view_invalid_token_returns_404(client):
+    response = client.get("/api/delivery-confirmation/not-a-real-token")
+    assert response.status_code == 404
+
+
+def test_confirmation_before_deposited_returns_404(client, db_session):
+    _, order = _create_sent_letter(client, db_session)
+    response = client.get(f"/api/delivery-confirmation/{order.tracking_number}")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# External carrier webhook
+# ---------------------------------------------------------------------------
+
+
+def test_webhook_deposits_delivery_with_valid_secret(client, db_session, auth_headers):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+
+    with patch.object(get_settings(), "delivery_webhook_secret", "test-webhook-secret"):
+        response = client.post(
+            "/api/webhooks/delivery/deposited",
+            json={"provider_code": "courrier_plus_internal", "tracking_number": order.tracking_number},
+            headers={"X-Webhook-Secret": "test-webhook-secret"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DEPOSITED"
+
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST"]) == 1
+
+
+def test_webhook_rejects_wrong_secret(client, db_session, auth_headers):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+
+    with patch.object(get_settings(), "delivery_webhook_secret", "correct-secret"):
+        response = client.post(
+            "/api/webhooks/delivery/deposited",
+            json={"provider_code": "courrier_plus_internal", "tracking_number": order.tracking_number},
+            headers={"X-Webhook-Secret": "wrong-secret"},
+        )
+    assert response.status_code == 401
+
+
+def test_webhook_rejects_when_no_secret_configured(client, db_session, auth_headers):
+    letter_id, order = _create_sent_letter(client, db_session)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+
+    with patch.object(get_settings(), "delivery_webhook_secret", ""):
+        response = client.post(
+            "/api/webhooks/delivery/deposited",
+            json={"provider_code": "courrier_plus_internal", "tracking_number": order.tracking_number},
+            headers={"X-Webhook-Secret": "anything"},
+        )
+    assert response.status_code == 401
+
+
+def test_webhook_unknown_tracking_number_returns_404(client):
+    with patch.object(get_settings(), "delivery_webhook_secret", "test-webhook-secret"):
+        response = client.post(
+            "/api/webhooks/delivery/deposited",
+            json={"provider_code": "courrier_plus_internal", "tracking_number": "CP-2026-9999999"},
+            headers={"X-Webhook-Secret": "test-webhook-secret"},
+        )
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -91,15 +227,17 @@ def test_delivery_endpoints_require_admin_auth(client, db_session):
     assert client.get("/api/admin/deliveries").status_code == 401
     assert client.get(f"/api/admin/deliveries/{order.id}").status_code == 401
     assert client.post(f"/api/admin/deliveries/{order.id}/pickup").status_code == 401
-    assert client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", json={}).status_code == 401
+    assert client.post(f"/api/admin/deliveries/{order.id}/deposit").status_code == 401
+    assert client.post(f"/api/admin/deliveries/{order.id}/force-confirm", json={}).status_code == 401
 
 
 def test_recipient_and_sender_have_no_delivery_mutation_endpoint(client, db_session):
     """There is no public/sender/recipient-facing route that can change a
-    delivery's status -- only /api/admin/deliveries/*, which is fully
-    authenticated. This test documents that guarantee structurally."""
+    delivery's status directly by id -- only /api/admin/deliveries/* (fully
+    authenticated) and /api/delivery-confirmation/{token} (token-scoped to
+    exactly one delivery, single-use). This test documents that guarantee
+    structurally."""
     _, order = _create_sent_letter(client, db_session)
-    # No such public route exists; attempting one 404s at the router level.
     assert client.post(f"/api/deliveries/{order.id}/confirm-delivery").status_code == 404
 
 
@@ -146,7 +284,7 @@ def test_delivery_not_found_returns_404(client, auth_headers):
 
 
 # ---------------------------------------------------------------------------
-# Public tracking / recipient access integration
+# Public tracking
 # ---------------------------------------------------------------------------
 
 
@@ -213,6 +351,6 @@ def test_mark_failed_requires_reason(client, db_session, auth_headers):
 
 def test_invalid_status_transition_via_api_returns_409(client, db_session, auth_headers):
     letter_id, order = _create_sent_letter(client, db_session)
-    # Cannot confirm delivery straight from READY_FOR_DISPATCH.
-    response = client.post(f"/api/admin/deliveries/{order.id}/confirm-delivery", headers=auth_headers, json={})
+    # Cannot force-confirm straight from READY_FOR_DISPATCH -- DEPOSITED first.
+    response = client.post(f"/api/admin/deliveries/{order.id}/force-confirm", headers=auth_headers, json={})
     assert response.status_code == 409

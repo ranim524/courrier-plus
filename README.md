@@ -153,19 +153,29 @@ separate from (but linked to) the letter's own lifecycle:
 ```
 Letter SENT (auto-creates the DeliveryOrder)
   → READY_FOR_DISPATCH → ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY
-  → DELIVERED (proof of delivery + delivery-confirmed emails)
+  → DEPOSITED (letter physically placed in the mailbox — admin action, or an
+               external carrier's own platform via a webhook)
+      → recipient emailed a single-use link to confirm receipt
+  → DELIVERED (recipient confirms, or an admin force-confirms as a fallback)
+      → proof of delivery + delivery-confirmed email to the sender
       → Letter.status becomes RECEIVED (if acknowledgment of receipt was paid for)
         or DELIVERED (otherwise) — the only way a letter ever leaves SENT
 ```
 or, on a failed attempt: `OUT_FOR_DELIVERY → DELIVERY_FAILED → (retry) or RETURNED_TO_SENDER`.
 
-**Only a confirmed physical delivery means the recipient actually received the letter** — no
-earlier status sends any email, and the confirmation is idempotent (repeating it never sends a
-duplicate). The recipient has no digital access to the letter's content at any point — no secure
-link, no online view — only the physical letter and, once delivered, the confirmation email.
-Admins manage the whole flow from **Admin → Livraisons** (assign a courier, advance status, confirm
-delivery) and **Admin → Livreurs** (add/deactivate couriers). The public tracking page shows the
-delivery status/timeline, without any courier or admin-only details.
+**Deposit and confirmation are two separate steps.** Placing the letter in the mailbox doesn't
+notify anyone by itself — it emails the recipient a single-use link asking them to confirm receipt,
+and only that confirmation (or an admin's manual override, if the recipient never responds) notifies
+the sender. This is the recipient's *only* digital touchpoint: the link never shows the letter's
+content, just enough to recognize which letter it's about, and it's single-use (reusing it 404s
+rather than duplicating anything). Admins manage the whole flow from **Admin → Livraisons** (assign
+a courier, advance status, mark deposited, force-confirm) and **Admin → Livreurs**
+(add/deactivate couriers). The public tracking page shows the delivery status/timeline, without any
+courier or admin-only details.
+
+A real external carrier reports a deposit through `POST /api/webhooks/delivery/deposited`
+(authenticated by `DELIVERY_WEBHOOK_SECRET`) instead of the admin clicking a button — same
+underlying `mark_deposited()` call, no change anywhere else.
 
 Phase 1 ships one seeded provider, "Courrier+ Delivery" (manual/internal — every status change is
 a direct admin action, labeled "suivi manuel" in the UI since there's no real-time carrier feed).

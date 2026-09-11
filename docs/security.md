@@ -12,14 +12,25 @@ claimed or implemented here.
 
 ## Implemented measures
 
-### No digital access for the recipient
-- The recipient never gets an email, a secure link, or any other digital access to a letter's
-  content — the only thing that ever reaches them is the physical letter itself, plus the
-  delivery-confirmed email once an admin confirms the physical delivery is complete (see
-  "Physical delivery" below). This removes an entire class of risk (token leakage, link forwarding,
-  expiry/revocation edge cases) by not having a recipient-facing secret at all.
-- The `access_tokens` table that used to back this flow is retained only as historical audit data
-  (see `docs/database.md`) — nothing creates or reads a new token anymore.
+### No digital access to a letter's content
+- The recipient never gets a secure link, an online view, or any other digital access to a letter's
+  subject/message/PDF. Their one and only digital touchpoint is confirming physical receipt — see
+  "Physical delivery" below — and even that link exposes nothing but a reference and the sender's
+  name.
+- The `access_tokens` table that used to back the old content-viewing flow is retained only as
+  historical audit data (see `docs/database.md`) — nothing creates or reads a new one anymore.
+
+### Delivery confirmation token (recipient)
+- Generated with `secrets.token_urlsafe(32)` (`app/core/security.py::generate_secure_token`) only
+  once a delivery reaches `DEPOSITED`. Only `SHA-256(token)` is stored
+  (`delivery_orders.confirmation_token_hash`); the raw value exists only in the email sent to the
+  recipient.
+- Single-use, not time-limited: cleared the instant the delivery reaches `DELIVERED`, so a reused
+  link (double-submit, an old tab, a forwarded email after the fact) 404s rather than re-triggering
+  anything.
+- Scoped to exactly one `DeliveryOrder` — it can never be used to view or act on any other letter's
+  delivery, and it never grants access to the letter's content itself (see
+  `DeliveryConfirmationView` in `docs/api.md`).
 
 ### Passwords & admin auth
 - Admin passwords hashed with bcrypt (`passlib`).
@@ -72,13 +83,20 @@ machine (`app/services/delivery_state.py`) follows the same pattern independentl
 - Public tracking (`/api/track/{reference}`) only ever exposes a `DeliveryPublicView` (tracking
   number, status, a timestamp-only timeline) — never courier name/phone, admin confirmation notes,
   or internal database IDs.
-- `DeliveryOrder.confirm_delivery()` (the only path that can send a "your letter was delivered"
-  email) is idempotent: a repeated confirmation never creates a duplicate `ProofOfDelivery`, audit
-  event, or notification email — same idempotency discipline as payment confirmation above.
+- Deposit and confirmation are two separate steps: `mark_deposited()` never sends the sender
+  anything, only a confirmation request to the recipient. The final `_finalize_delivery()` (the
+  only path that can send the sender's "your letter was delivered" email) is idempotent: a repeated
+  confirmation — recipient double-click, admin force-confirm after the fact — never creates a
+  duplicate `ProofOfDelivery`, audit event, or notification email, same discipline as payment
+  confirmation above.
 - No delivery-provider API credentials are stored in the database, even as the system becomes
   ready for a real external carrier (`DeliveryProvider.api_enabled`) — they belong in environment
   variables, referenced by the provider's `code`, following the same rule as every other secret in
   this project (never in source, never in Git, never logged).
+- An external carrier's own platform reports a deposit via `POST /api/webhooks/delivery/deposited`,
+  authenticated by a single shared secret (`DELIVERY_WEBHOOK_SECRET`, compared with
+  `hmac.compare_digest` to avoid a timing side-channel) rather than a per-provider DB credential. An
+  empty/unconfigured secret rejects every call — misconfiguration fails closed, not open.
 
 ## Privacy
 

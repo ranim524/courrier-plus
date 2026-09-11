@@ -63,11 +63,27 @@ an immutable snapshot, and `docs/architecture.md` for the page → sheet → wei
 |---|---|---|
 | GET | `/api/track/{reference}` | Public tracking info + event timeline for a letter reference. Includes a `delivery` object (tracking number, status, timeline) once a `DeliveryOrder` exists — no courier/admin info, see `docs/database.md`. |
 
-**The recipient has no digital access to a letter's content and no endpoint of their own.** There
-is no secure link, no online "view"/"open"/"confirm receipt" action. The only thing that ever
-reaches the recipient is the physical letter itself, plus a delivery-confirmed email sent once an
-admin confirms the physical delivery — see the `/api/admin/deliveries/{id}/confirm-delivery`
-endpoint below.
+**The recipient has no digital access to a letter's content.** There is no secure link, no online
+"view" action, nothing that shows the subject/message/PDF. The one narrow exception is confirming
+that the physical letter was actually received — see below.
+
+## Public — Delivery confirmation
+
+Once a delivery is `DEPOSITED` (physically placed in the recipient's mailbox — see the admin/webhook
+endpoints further down), the recipient gets a single-use link by email to confirm receipt. This is
+the only digital action the recipient can ever take, and it exposes only enough to recognize which
+letter this is about — never the subject, message, or PDF.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/delivery-confirmation/{token}` | Returns `{reference, tracking_number, sender_first_name, sender_last_name, confirmed}` for a valid, not-yet-used token. `404` for an invalid, already-used, or not-yet-issued token. |
+| POST | `/api/delivery-confirmation/{token}/confirm` | Confirms receipt → `DeliveryOrder.DELIVERED`, `Letter.status` → `RECEIVED`/`DELIVERED`, triggers the sender's delivery-confirmed email. The token is single-use: it's cleared the moment this succeeds, so reusing it (double-submit, stale tab) returns `404`, not a duplicate confirmation. |
+
+## Delivery webhook (external carriers)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/webhooks/delivery/deposited` | `{"provider_code", "tracking_number"}`, header `X-Webhook-Secret: <DELIVERY_WEBHOOK_SECRET>`. Called by an external carrier's own platform (not our admin UI) once their courier reports the letter deposited — equivalent to the admin's `/deposit` action above, for a provider with `api_enabled=true`. `401` on a missing/wrong/unconfigured secret, `404` if the tracking number doesn't belong to that provider. See `.claude/skills/delivery/SKILL.md`. |
 
 ## Admin (JWT-protected, `Authorization: Bearer <token>`)
 
@@ -95,7 +111,8 @@ See `.claude/skills/delivery/SKILL.md` and `docs/architecture.md` for the full d
 | POST | `/api/admin/deliveries/{id}/pickup` | → `PICKED_UP`. |
 | POST | `/api/admin/deliveries/{id}/in-transit` | → `IN_TRANSIT`. |
 | POST | `/api/admin/deliveries/{id}/out-for-delivery` | → `OUT_FOR_DELIVERY`. |
-| POST | `/api/admin/deliveries/{id}/confirm-delivery` | `{"notes"?}` → `DELIVERED`. **The only endpoint that can trigger the delivery-confirmed emails**, sent to both the recipient and the sender. Also moves `Letter.status` to `RECEIVED` (if `acknowledgment_of_receipt` was requested) or `DELIVERED` — the only way a letter ever leaves `SENT`. Idempotent: confirming an already-`DELIVERED` order is a no-op. |
+| POST | `/api/admin/deliveries/{id}/deposit` | → `DEPOSITED`. The letter was physically placed in the recipient's mailbox — admin-side equivalent of the external-carrier webhook below (for the manual/internal provider). Emails the recipient a single-use confirmation link. Does **not** notify the sender yet. |
+| POST | `/api/admin/deliveries/{id}/force-confirm` | `{"notes"?}` → `DELIVERED`. Admin fallback for when the recipient never confirms. Only reachable from `DEPOSITED`. **This or the recipient's own confirmation (see below) are the only two ways to trigger the sender's delivery-confirmed email.** Also moves `Letter.status` to `RECEIVED` (if `acknowledgment_of_receipt` was requested) or `DELIVERED`. Idempotent: confirming an already-`DELIVERED` order is a no-op. |
 | POST | `/api/admin/deliveries/{id}/fail` | `{"reason", "notes"?}` → `DELIVERY_FAILED`, creates a `DeliveryAttempt`. |
 | POST | `/api/admin/deliveries/{id}/retry` | `DELIVERY_FAILED` → `OUT_FOR_DELIVERY` (next attempt). |
 | POST | `/api/admin/deliveries/{id}/return` | `DELIVERY_FAILED` → `RETURNED_TO_SENDER`. |

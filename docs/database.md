@@ -43,10 +43,10 @@ All tables have `created_at`/`updated_at` timestamptz columns.
 
 **Status enum**: `DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED` or `RECEIVED`, with
 exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. `SENT` only ever moves forward via
-`delivery_service.confirm_delivery()` once an admin confirms the physical delivery — `RECEIVED` if
-the letter was created with `acknowledgment_of_receipt: true`, `DELIVERED` otherwise. Transitions
-are enforced in code (`app/services/letter_state.py`), not by a DB trigger — kept simple and
-explicit.
+`delivery_service._finalize_delivery()` once the recipient confirms receipt of the deposited letter
+(or an admin force-confirms as a fallback) — `RECEIVED` if the letter was created with
+`acknowledgment_of_receipt: true`, `DELIVERED` otherwise. Transitions are enforced in code
+(`app/services/letter_state.py`), not by a DB trigger — kept simple and explicit.
 
 **Pricing is a snapshot, not a live calculation.** `total_amount` and the rest of the pricing
 breakdown are computed once by `app/services/pricing_service.py` at letter-creation time and
@@ -130,9 +130,15 @@ Couriers, admin-managed only (never exposed to senders/recipients). `provider_id
 One-to-one with `letters` (unique FK). `tracking_number` (unique, e.g. `CP-2026-0001847` — never the
 row's UUID), `provider_id` FK, `courier_id` FK (nullable until assigned), `status` (`DeliveryStatus`
 enum, indexed), `attempt_count`, and a timestamp column per major milestone: `assigned_at`,
-`picked_up_at`, `in_transit_at`, `out_for_delivery_at`, `delivered_at`, `failed_at`, `returned_at`
-(plus `created_at`/`updated_at` from the standard mixin). These timestamps are also what
-`delivery_service.to_public_view()` uses to build the public tracking timeline.
+`picked_up_at`, `in_transit_at`, `out_for_delivery_at`, `deposited_at`, `delivered_at`, `failed_at`,
+`returned_at` (plus `created_at`/`updated_at` from the standard mixin). These timestamps are also
+what `delivery_service.to_public_view()` uses to build the public tracking timeline.
+
+`confirmation_token_hash` (varchar(64), unique, nullable) is the SHA-256 hash of the recipient's
+single-use delivery-confirmation link — set by `mark_deposited()`, checked by
+`GET/POST /api/delivery-confirmation/{token}`, and cleared the moment the delivery reaches
+`DELIVERED` (single-use, same hashing discipline as every other token in this project — the raw
+value is never stored, only ever in the email sent to the recipient).
 
 ### `delivery_attempts`
 One row per **failed** delivery attempt (a successful one gets a `proofs_of_delivery` row instead).
@@ -141,7 +147,9 @@ One row per **failed** delivery attempt (a successful one gets a `proofs_of_deli
 
 ### `proofs_of_delivery`
 One-to-one with `delivery_orders` (unique FK), created exactly once by the idempotent
-`confirm_delivery()`. `delivered_at`, `delivered_by` (the confirming admin's email),
+`delivery_service._finalize_delivery()` (called from either the recipient's own confirmation or the
+admin's force-confirm fallback). `delivered_at`, `delivered_by` (the recipient's email, or
+`"Confirmation manuelle par l'administrateur (<admin email>)"` for the fallback path),
 `recipient_name_if_provided` (nullable), `delivery_method` (nullable), `proof_type`
 (`MANUAL_CONFIRMATION` for the current prototype — the column also supports `SIGNATURE`/`OTP`/
 `PHOTO`/`EXTERNAL_PROVIDER_CONFIRMATION` for later, but only ever set to a type that was actually

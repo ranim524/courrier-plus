@@ -81,16 +81,27 @@ def mark_out_for_delivery(delivery_id: UUID, db: Session = Depends(get_db), admi
     return delivery_service.to_read(order)
 
 
-@router.post("/{delivery_id}/confirm-delivery", response_model=DeliveryOrderRead)
-def confirm_delivery(
+@router.post("/{delivery_id}/deposit", response_model=DeliveryOrderRead)
+def mark_deposited(delivery_id: UUID, db: Session = Depends(get_db), admin: Admin = Depends(get_current_admin)) -> DeliveryOrderRead:
+    """Admin-side equivalent of the external-carrier webhook (see
+    routes/delivery_webhook.py) for the manual/internal provider: the letter
+    was physically placed in the mailbox. Emails the recipient a
+    confirmation link -- does NOT notify the sender yet."""
+    order = delivery_service.mark_deposited(db, delivery_id, admin)
+    return delivery_service.to_read(order)
+
+
+@router.post("/{delivery_id}/force-confirm", response_model=DeliveryOrderRead)
+def force_confirm_delivery(
     delivery_id: UUID,
     payload: DeliveryConfirmRequest,
     db: Session = Depends(get_db),
     admin: Admin = Depends(get_current_admin),
 ) -> DeliveryOrderRead:
-    """Idempotent: confirming an already-DELIVERED order is a no-op, never
-    duplicates the proof/event/notification emails (spec section 24/46)."""
-    order = delivery_service.confirm_delivery(db, delivery_id, admin, payload.notes)
+    """Fallback when the recipient never clicks their confirmation link.
+    Idempotent: confirming an already-DELIVERED order is a no-op, never
+    duplicates the proof/event/notification email (spec section 24/46)."""
+    order = delivery_service.force_confirm_delivery(db, delivery_id, admin, payload.notes)
     return delivery_service.to_read(order)
 
 
