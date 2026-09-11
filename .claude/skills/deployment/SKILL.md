@@ -7,7 +7,7 @@ description: Docker/Compose and environment conventions for running Courrier+ be
 
 ## Purpose
 Provide a reproducible way to run the whole stack locally (Docker Compose) and in production
-(Cloudflare Pages + R2, Render, Neon), while keeping plain local dev (no Docker) fully supported.
+(Cloudflare Pages, Render, Neon), while keeping plain local dev (no Docker) fully supported.
 
 ## When to use it
 When touching `docker-compose.yml`, Dockerfiles, `render.yaml`, `frontend/public/_redirects`, or
@@ -21,10 +21,13 @@ deployment-related env vars.
 - Local (non-Docker) dev remains the primary/simplest path for a student; Docker is offered as a convenience/production-parity option, not a requirement.
 - **Production topology** (see `docs/deployment.md` for the full step-by-step): Cloudflare Pages
   (frontend, static build, reads `frontend/public/_redirects` for SPA routing) + Render (backend,
-  builds `backend/Dockerfile` directly from `render.yaml` at the repo root) + Neon (PostgreSQL) +
-  Cloudflare R2 (documents, via `STORAGE_PROVIDER=r2` — see [[document-management]]). Chosen because
-  Cloudflare Workers don't run a Python/SQLAlchemy/psycopg2/bcrypt stack natively; this hybrid keeps
-  the existing backend as-is.
+  builds `backend/Dockerfile` directly from `render.yaml` at the repo root) + Neon (PostgreSQL,
+  also holds documents via `STORAGE_PROVIDER=database` — see [[document-management]]). Chosen
+  because Cloudflare Workers don't run a Python/SQLAlchemy/psycopg2/bcrypt stack natively; this
+  hybrid keeps the existing backend as-is. Documents live in Postgres rather than Cloudflare R2 by
+  default because R2 requires a billing method on the Cloudflare account even for its free tier —
+  `STORAGE_PROVIDER=r2` (`R2StorageProvider` is already implemented) is a config-only upgrade later
+  if that becomes worth it.
 - `render.yaml` lists every env var with `sync: false` for anything secret (Render prompts for it
   in the dashboard instead of storing it in the repo) — never put a real secret value in `render.yaml`.
 
@@ -42,7 +45,6 @@ deployment-related env vars.
 ## Workflow (production)
 1. Push to GitHub.
 2. Neon: create project, copy `DATABASE_URL`.
-3. Cloudflare R2: create bucket + API token, note account ID/keys/bucket name.
-4. Render: New Blueprint from the repo (reads `render.yaml`), fill in the `sync: false` env vars, deploy, then run `alembic upgrade head` and `python -m app.scripts.create_admin` from the Render shell.
-5. Cloudflare Pages: connect the repo, root directory `frontend`, build `npm run build`, output `dist`, set `VITE_API_URL` to the Render URL.
-6. Set `FRONTEND_URL` on Render to the Pages URL and redeploy.
+3. Render: New Blueprint from the repo (reads `render.yaml`), fill in the `sync: false` env vars, deploy, then run `alembic upgrade head` and `python -m app.scripts.create_admin` from the Render shell.
+4. Cloudflare Pages: connect the repo, root directory `frontend`, build `npm run build`, output `dist`, set `VITE_API_URL` to the Render URL.
+5. Set `FRONTEND_URL` on Render to the Pages URL and redeploy.

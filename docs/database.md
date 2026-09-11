@@ -45,7 +45,22 @@ table itself.
 ## `documents`
 One-to-one with `letters` (unique FK). Stores `original_filename` (display only),
 `internal_filename` + `storage_path` (never derived from user input), `mime_type`, `size_bytes`,
-and `sha256` (integrity hash of the actual file bytes).
+and `sha256` (integrity hash of the actual file bytes). `storage_path` is a logical key interpreted
+by whichever `StorageProvider` is active (`local`, `database`, or `r2`) — it's a filesystem path for
+local, an S3 object key for R2, and the primary key of `document_blobs` for the database provider.
+
+## `document_blobs`
+Only populated when `STORAGE_PROVIDER=database`. Holds the actual file bytes when documents are
+stored directly in Postgres instead of a separate object-storage service (see
+`app/services/storage/database_provider.py` and `docs/deployment.md`).
+
+| Column | Type | Notes |
+|---|---|---|
+| storage_path | varchar(500) PK | same value as `documents.storage_path` — a natural key, no surrogate UUID since this table is internal storage plumbing, never exposed via the API |
+| data | bytea | raw file bytes |
+
+Not linked to `documents` by a foreign key — same decoupling as the local-filesystem and R2
+providers, where the storage layer never knows about the `documents` table.
 
 ## `payments`
 | Column | Type | Notes |

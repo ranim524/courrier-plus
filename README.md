@@ -153,17 +153,18 @@ fully locally without it.
 
 ## Production deployment (Cloudflare)
 
-Documents can be stored in **Cloudflare R2** instead of the local filesystem (`STORAGE_PROVIDER=r2`
-in `.env`) — the storage layer is abstracted (`app/services/storage/`) so this is a config change,
-not a code change. The recommended production topology is:
-
 - **Frontend** → Cloudflare Pages (static build, free)
-- **Documents** → Cloudflare R2 (S3-compatible, free tier: 10GB storage, zero egress fees)
 - **Backend** → Render (Docker, free tier — sleeps after 15min inactivity)
 - **Database** → Neon (serverless PostgreSQL, free tier)
+- **Documents** → stored as bytes in that same Postgres database
+  (`STORAGE_PROVIDER=database`, see `app/services/storage/database_provider.py`) — no third-party
+  object-storage account needed. The storage layer is abstracted (`app/services/storage/`), so an
+  S3-compatible provider like Cloudflare R2 (`STORAGE_PROVIDER=r2`, already implemented) is a
+  config-only swap later if document volume grows past what's comfortable in the database. R2
+  itself requires adding a billing method even for its free tier, which is why it isn't the default.
 
 Full step-by-step instructions (account creation, env vars, `render.yaml`, CORS, DNS) are in
-[`docs/deployment.md`](docs/deployment.md#production-deployment-cloudflare-pages--r2-render-neon).
+[`docs/deployment.md`](docs/deployment.md#production-deployment-cloudflare-pages-render-neon).
 
 ## Security
 

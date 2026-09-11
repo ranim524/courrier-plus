@@ -40,16 +40,13 @@ services:
         value: mock
       - key: CURRENCY
         value: TND
+      # "database" stores PDFs as bytes in the Postgres database above
+      # (document_blobs table) -- no object-storage account, API key, or
+      # payment method needed. Switch to "r2" (see R2StorageProvider) later
+      # if document volume outgrows this; that only needs adding the four
+      # R2_* vars back here, no other code change.
       - key: STORAGE_PROVIDER
-        value: r2
-      - key: R2_ACCOUNT_ID
-        sync: false
-      - key: R2_ACCESS_KEY_ID
-        sync: false
-      - key: R2_SECRET_ACCESS_KEY
-        sync: false
-      - key: R2_BUCKET_NAME
-        sync: false
+        value: database
       - key: MAX_UPLOAD_SIZE_MB
         value: "10"
       - key: FIRST_ADMIN_EMAIL

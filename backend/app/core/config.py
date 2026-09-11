@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     currency: str = "TND"
 
     # File uploads
-    storage_provider: str = "local"  # "local" or "r2"
+    storage_provider: str = "local"  # "local", "database" (PostgreSQL), or "r2"
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 10
 

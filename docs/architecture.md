@@ -68,10 +68,12 @@ Every transition is explicit and validated by `app/services/letter_state.py` —
 - **Payment**: `PaymentProvider` interface (`app/services/payment/base.py`) with a `MockPaymentProvider`
   implementation. Selected via `PAYMENT_PROVIDER` env var. A real Tunisian provider can be added as
   a new class implementing the same interface without touching callers.
-- **Storage**: `StorageProvider` interface (`app/services/storage/base.py`) with two implementations
+- **Storage**: `StorageProvider` interface (`app/services/storage/base.py`) with three implementations
   selected via `STORAGE_PROVIDER`: `LocalStorageProvider` (writes to `backend/uploads/`, the local
-  dev default) and `R2StorageProvider` (Cloudflare R2, S3-compatible, used in production — see
-  `docs/deployment.md`). Callers (`document_service.py`) only ever use the interface, never a
+  dev default), `DatabaseStorageProvider` (stores file bytes in the `document_blobs` Postgres table,
+  used in production — no object-storage account needed), and `R2StorageProvider` (Cloudflare R2,
+  S3-compatible, an available upgrade if document volume grows — see `docs/deployment.md`). Callers
+  (`document_service.py`) only ever use the interface, never a
   concrete class directly.
 
 ## Admin vs. public surface

@@ -10,4 +10,8 @@ def get_storage_provider() -> StorageProvider:
         from app.services.storage.r2_provider import R2StorageProvider
 
         return R2StorageProvider()
+    if settings.storage_provider == "database":
+        from app.services.storage.database_provider import DatabaseStorageProvider
+
+        return DatabaseStorageProvider()
     return LocalStorageProvider()
