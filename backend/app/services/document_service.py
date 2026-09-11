@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.exceptions import ValidationAppError
 from app.models.document import Document
 from app.repositories import document_repository
-from app.services.storage.local_provider import get_storage_provider
+from app.services.storage import get_storage_provider
 from app.utils.filenames import generate_internal_filename, sanitize_display_filename
 from app.utils.hashing import sha256_of_bytes
 

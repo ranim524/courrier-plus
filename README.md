@@ -151,6 +151,20 @@ docker compose up
 See [`docs/deployment.md`](docs/deployment.md) for details. Docker is optional — the app runs
 fully locally without it.
 
+## Production deployment (Cloudflare)
+
+Documents can be stored in **Cloudflare R2** instead of the local filesystem (`STORAGE_PROVIDER=r2`
+in `.env`) — the storage layer is abstracted (`app/services/storage/`) so this is a config change,
+not a code change. The recommended production topology is:
+
+- **Frontend** → Cloudflare Pages (static build, free)
+- **Documents** → Cloudflare R2 (S3-compatible, free tier: 10GB storage, zero egress fees)
+- **Backend** → Render (Docker, free tier — sleeps after 15min inactivity)
+- **Database** → Neon (serverless PostgreSQL, free tier)
+
+Full step-by-step instructions (account creation, env vars, `render.yaml`, CORS, DNS) are in
+[`docs/deployment.md`](docs/deployment.md#production-deployment-cloudflare-pages--r2-render-neon).
+
 ## Security
 
 See [`docs/security.md`](docs/security.md) for the full list of implemented measures (token

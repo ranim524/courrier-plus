@@ -34,8 +34,19 @@ class Settings(BaseSettings):
     currency: str = "TND"
 
     # File uploads
+    storage_provider: str = "local"  # "local" or "r2"
     upload_dir: str = "uploads"
     max_upload_size_mb: int = 10
+
+    # Cloudflare R2 (S3-compatible object storage), used when storage_provider="r2"
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+
+    @property
+    def r2_endpoint_url(self) -> str:
+        return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
 
     # Admin bootstrap
     first_admin_email: str = ""

@@ -32,7 +32,3 @@ class LocalStorageProvider(StorageProvider):
         target = self._resolve(storage_path)
         if target.exists():
             target.unlink()
-
-
-def get_storage_provider() -> StorageProvider:
-    return LocalStorageProvider()

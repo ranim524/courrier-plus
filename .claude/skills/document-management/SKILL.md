@@ -12,7 +12,7 @@ Handle PDF uploads and letter documents/messages safely, with an abstract storag
 Any time you touch document upload, storage, retrieval, or hashing.
 
 ## Project conventions
-- Storage abstraction: `app/services/storage/base.py` defines a `StorageProvider` interface (`save(bytes, filename) -> path`, `read(path) -> bytes`, `delete(path)`). `LocalStorageProvider` implements it against `backend/uploads/`. This keeps the door open for an S3-compatible provider later without touching callers.
+- Storage abstraction: `app/services/storage/base.py` defines a `StorageProvider` interface (`save(bytes, filename) -> path`, `read(path) -> bytes`, `delete(path)`). Two implementations: `LocalStorageProvider` (`backend/uploads/`, local dev default) and `R2StorageProvider` (Cloudflare R2 via `boto3`'s S3-compatible client, used in production). Selected by `STORAGE_PROVIDER` env var via `app/services/storage/__init__.py::get_storage_provider()` — callers never import a concrete class directly. See [[deployment]].
 - Every uploaded document row (`documents` table) stores: `original_filename`, a generated safe/internal filename (UUID-based), `storage_path` (relative, never absolute/user-controlled), `mime_type`, `size`, `sha256`, `created_at`.
 - SHA-256 computed via `app/utils/hashing.py::sha256_of_bytes(data: bytes) -> str`, computed from the actual uploaded bytes before writing to disk.
 - Document retrieval always goes through an authorized route (admin JWT, or the letter's own recipient access token) — never a static file mount serving `backend/uploads/` directly.
