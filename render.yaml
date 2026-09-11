@@ -7,6 +7,13 @@ services:
     plan: free
     healthCheckPath: /api/health
     envVars:
+      # DATABASE_URL points at an external Neon Postgres instance, not a
+      # Render-managed database defined in this Blueprint -- Render's
+      # `fromDatabase` reference only works for a `databases:` resource
+      # declared in this same render.yaml, which doesn't apply here. `sync:
+      # false` is the correct secure equivalent for an external DB: Render
+      # prompts for the value once in its dashboard (encrypted at rest
+      # there) and it never touches this file or the git history.
       - key: DATABASE_URL
         sync: false
       - key: SECRET_KEY
