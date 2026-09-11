@@ -19,8 +19,8 @@ Any time you touch document upload, storage, retrieval, or hashing.
 - Document retrieval always goes through an authorized route (admin JWT, or the letter's own recipient access token) — never a static file mount serving `backend/uploads/` directly.
 
 ## Pricing integration
-- `document_service.count_pdf_pages(data: bytes) -> int` (via `pypdf`) is the sole source of truth for page count — never accept a page count from the client. `letter_service.create_letter()` calls it, then `pricing_service.calculate_price()` to compute the price snapshot. See [[payment]].
-- A corrupt/unreadable PDF or one exceeding 400 pages is rejected with a clear `ValidationAppError` before the file is ever stored.
+- `document_service.count_pdf_pages(data: bytes) -> int` (via `pypdf`) is the sole source of truth for page count — never accept a page count from the client. `letter_service.create_letter()` calls it, then `pricing_service.calculate_letter_price()` to compute the physical-mail price snapshot (pages → sheets → paper/envelope weight → postal bracket → printing/paper/envelope/postage/fees). See [[payment]].
+- A corrupt/unreadable PDF is rejected with a clear `ValidationAppError` before the file is ever stored. There is no fixed page-count cap: `calculate_letter_price()` rejects based on the *computed estimated weight* exceeding `MAX_WEIGHT_G` (2000g), which depends on `printing_sides` (duplex roughly doubles the page count that fits under the same weight) — never hard-code a page-count limit outside that calculation.
 
 ## Important rules (see also [[security]])
 - Validate extension AND MIME type AND that the content actually starts with `%PDF-` magic bytes — reject anything else.

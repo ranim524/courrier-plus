@@ -35,16 +35,26 @@ class Letter(UUIDPKMixin, TimestampMixin, Base):
     )
 
     # Pricing breakdown -- a snapshot computed at creation time by
-    # pricing_service.calculate_price(). Never recomputed later: if the tariff
-    # configuration changes, previously priced letters keep their original
-    # amount (see docs/database.md).
+    # pricing_service.calculate_letter_price(). Never recomputed later: if the
+    # tariff/printing configuration changes, previously priced letters keep
+    # their original amount (see docs/database.md).
     page_count: Mapped[int] = mapped_column(Integer, nullable=False)
-    estimated_weight_g: Mapped[int] = mapped_column(Integer, nullable=False)
+    sheet_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    printing_mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    printing_sides: Mapped[str] = mapped_column(String(10), nullable=False)
+    paper_weight_g: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    envelope_weight_g: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    estimated_weight_g: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     weight_bracket: Mapped[str] = mapped_column(String(20), nullable=False)
-    base_postage: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
-    registered_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    printing_cost: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    paper_cost: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    envelope_cost: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    postal_postage: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
+    registered_mail_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     acknowledgment_of_receipt: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     acknowledgment_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    delivery_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False, default=0)
+    service_fee: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(10, 3), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="TND")
 

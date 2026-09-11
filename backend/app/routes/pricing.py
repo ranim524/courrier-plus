@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from app.core.rate_limit import limiter
 from app.schemas.pricing import PricingBreakdownRead, PricingCalculateRequest
 from app.services import document_service, pricing_service
+from app.services.pricing_service import DEFAULT_PRINTING_MODE, DEFAULT_PRINTING_SIDES
 
 router = APIRouter(prefix="/api/pricing", tags=["pricing"])
 
@@ -17,7 +18,9 @@ def calculate_price(request: Request, payload: PricingCalculateRequest) -> Prici
     """Pure pricing calculation from an already-known page count. Used
     internally/for testing; the sender-facing flow uses /preview instead,
     since the frontend must never determine the page count itself."""
-    breakdown = pricing_service.calculate_price(payload.page_count, payload.acknowledgment_of_receipt)
+    breakdown = pricing_service.calculate_letter_price(
+        payload.page_count, payload.printing_mode, payload.printing_sides, payload.acknowledgment_of_receipt
+    )
     return PricingBreakdownRead(**breakdown.to_dict())
 
 
@@ -26,6 +29,8 @@ def calculate_price(request: Request, payload: PricingCalculateRequest) -> Prici
 async def preview_price(
     request: Request,
     acknowledgment_of_receipt: bool = Form(default=False),
+    printing_mode: str = Form(default=DEFAULT_PRINTING_MODE),
+    printing_sides: str = Form(default=DEFAULT_PRINTING_SIDES),
     document: UploadFile | None = File(default=None),
 ) -> PricingBreakdownRead:
     """Live price preview for the send-letter wizard, called whenever the
@@ -38,5 +43,7 @@ async def preview_price(
     else:
         page_count = TEXT_MESSAGE_PAGE_COUNT
 
-    breakdown = pricing_service.calculate_price(page_count, acknowledgment_of_receipt)
+    breakdown = pricing_service.calculate_letter_price(
+        page_count, printing_mode, printing_sides, acknowledgment_of_receipt
+    )
     return PricingBreakdownRead(**breakdown.to_dict())

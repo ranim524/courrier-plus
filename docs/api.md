@@ -17,31 +17,45 @@ All responses use a consistent error shape on failure: `{"detail": "..."}`.
 
 ## Public — Pricing
 
+Courrier+ physically prints, envelopes, and mails the uploaded PDF as registered mail. The price
+reflects that real physical service — see `docs/architecture.md` for the full pricing model.
+
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/pricing/calculate` | `{"page_count": 10, "acknowledgment_of_receipt": true}` → full breakdown. Pure calculation from an already-known page count. |
-| POST | `/api/pricing/preview` | Multipart form: optional `document` (PDF) + `acknowledgment_of_receipt`. The backend counts the PDF's pages itself (or treats a missing document as 1 page) and returns the same breakdown. This is what the send-letter wizard calls live as the sender uploads a file or toggles AR — the frontend never determines the page count or price itself. |
+| POST | `/api/pricing/calculate` | `{"page_count": 10, "printing_mode": "black_and_white", "printing_sides": "single", "acknowledgment_of_receipt": true}` → full breakdown. Pure calculation from an already-known page count. `printing_mode`/`printing_sides` default to `"black_and_white"`/`"single"` if omitted. |
+| POST | `/api/pricing/preview` | Multipart form: optional `document` (PDF) + `acknowledgment_of_receipt` (+ optional `printing_mode`/`printing_sides`). The backend counts the PDF's pages itself (or treats a missing document as 1 page) and returns the same breakdown. This is what the send-letter wizard calls live as the sender uploads a file or toggles AR — the frontend never determines the page count or price itself. |
 
 Both return:
 ```json
 {
-  "page_count": 20,
-  "estimated_weight_g": 100,
-  "weight_bracket": "20-100g",
-  "base_postage": "1.200",
-  "registered_fee": "3.000",
+  "page_count": 10,
+  "sheet_count": 10,
+  "printing_mode": "black_and_white",
+  "printing_sides": "single",
+  "paper_weight_g": "50.000",
+  "envelope_weight_g": "10.000",
+  "estimated_weight_g": "60.000",
+  "weight_bracket": "21-100g",
+  "printing_cost": "1.500",
+  "paper_cost": "0.500",
+  "envelope_cost": "0.500",
+  "postal_postage": "1.200",
+  "registered_mail_fee": "3.000",
   "acknowledgment_of_receipt": true,
   "acknowledgment_fee": "2.500",
-  "total": "6.700",
+  "delivery_fee": "0.000",
+  "service_fee": "1.000",
+  "total": "10.200",
   "currency": "TND"
 }
 ```
 
 **Pricing is authoritative on the backend only.** `POST /api/letters` has no `price`/`total_amount`/
-`page_count` field — anything sent under those names by a client is simply ignored (there is no
-parameter to bind it to). The backend always re-derives the page count from the actual uploaded
-PDF bytes and recomputes the price via `pricing_service.calculate_price()`. See
-`docs/database.md` for how the result is stored as an immutable snapshot.
+`page_count`/`sheet_count`/weight field — anything sent under those names by a client is simply
+ignored (there is no parameter to bind it to). The backend always re-derives the page count from
+the actual uploaded PDF bytes and recomputes the full price via
+`pricing_service.calculate_letter_price()`. See `docs/database.md` for how the result is stored as
+an immutable snapshot, and `docs/architecture.md` for the page → sheet → weight → tariff pipeline.
 
 ## Public — Tracking & Recipient Access
 

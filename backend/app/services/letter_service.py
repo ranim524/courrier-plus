@@ -44,7 +44,9 @@ def create_letter(
     else:
         page_count = TEXT_MESSAGE_PAGE_COUNT
 
-    breakdown = pricing_service.calculate_price(page_count, payload.acknowledgment_of_receipt)
+    breakdown = pricing_service.calculate_letter_price(
+        page_count, acknowledgment_of_receipt=payload.acknowledgment_of_receipt
+    )
 
     letter = Letter(
         sender_first_name=payload.sender.first_name,
@@ -60,12 +62,22 @@ def create_letter(
         content_type=content_type,
         status=LetterStatus.DRAFT,
         page_count=breakdown.page_count,
+        sheet_count=breakdown.sheet_count,
+        printing_mode=breakdown.printing_mode,
+        printing_sides=breakdown.printing_sides,
+        paper_weight_g=breakdown.paper_weight_g,
+        envelope_weight_g=breakdown.envelope_weight_g,
         estimated_weight_g=breakdown.estimated_weight_g,
         weight_bracket=breakdown.weight_bracket,
-        base_postage=breakdown.base_postage,
-        registered_fee=breakdown.registered_fee,
+        printing_cost=breakdown.printing_cost,
+        paper_cost=breakdown.paper_cost,
+        envelope_cost=breakdown.envelope_cost,
+        postal_postage=breakdown.postal_postage,
+        registered_mail_fee=breakdown.registered_mail_fee,
         acknowledgment_of_receipt=breakdown.acknowledgment_of_receipt,
         acknowledgment_fee=breakdown.acknowledgment_fee,
+        delivery_fee=breakdown.delivery_fee,
+        service_fee=breakdown.service_fee,
         total_amount=breakdown.total,
         currency=breakdown.currency,
     )

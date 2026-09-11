@@ -23,13 +23,23 @@ All tables have `created_at`/`updated_at` timestamptz columns.
 | content_type | enum | `TEXT_MESSAGE` \| `PDF_UPLOAD` |
 | status | enum | see lifecycle below |
 | page_count | integer | PDF page count (or 1 for a text-only letter), determined server-side |
-| estimated_weight_g | integer | `page_count * ESTIMATED_GRAMS_PER_PAGE` (see `pricing_service.py`) |
-| weight_bracket | varchar(20) | label of the matched tariff bracket, e.g. `20-100g` |
-| base_postage | numeric(10,3) | postage for the matched weight bracket |
-| registered_fee | numeric(10,3) | fixed registered-mail fee |
+| sheet_count | integer | physical sheets to print: `page_count` (simplex) or `ceil(page_count/2)` (duplex) |
+| printing_mode | varchar(20) | `black_and_white` or `color` |
+| printing_sides | varchar(10) | `single` (recto) or `double` (recto-verso) |
+| paper_weight_g | numeric(10,3) | `sheet_count * PAPER_WEIGHT_PER_SHEET_G` |
+| envelope_weight_g | numeric(10,3) | fixed envelope weight |
+| estimated_weight_g | numeric(10,3) | `paper_weight_g + envelope_weight_g` — an estimate, not a scale reading |
+| weight_bracket | varchar(20) | label of the matched postal tariff bracket, e.g. `21-100g` |
+| printing_cost | numeric(10,3) | `page_count * cost-per-page` for the chosen printing mode |
+| paper_cost | numeric(10,3) | `sheet_count * PAPER_COST_PER_SHEET` |
+| envelope_cost | numeric(10,3) | fixed envelope cost |
+| postal_postage | numeric(10,3) | postage for the matched weight bracket |
+| registered_mail_fee | numeric(10,3) | fixed registered-mail (recommandation) fee, mandatory |
 | acknowledgment_of_receipt | boolean | whether the sender requested an accusé de réception |
 | acknowledgment_fee | numeric(10,3) | AR fee, `0` if not requested |
-| total_amount / currency | numeric(10,3) / varchar(3) | full price snapshot at creation time |
+| delivery_fee | numeric(10,3) | configurable delivery/logistics fee (currently `0`, included in postage) |
+| service_fee | numeric(10,3) | Courrier+'s own platform/processing fee |
+| total_amount / currency | numeric(10,3) / varchar(3) | full price snapshot at creation time (sum of all the above cost/fee columns) |
 
 **Status enum**: `DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED → OPENED → RECEIVED`, with
 exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. Transitions are enforced in code
@@ -37,10 +47,9 @@ exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. Transitions are 
 
 **Pricing is a snapshot, not a live calculation.** `total_amount` and the rest of the pricing
 breakdown are computed once by `app/services/pricing_service.py` at letter-creation time and
-stored on the row. If the tariff configuration (brackets, fees, grams-per-page) changes later,
-already-created letters keep the price they were created with — nothing is recomputed
-retroactively. See `docs/api.md` for the pricing endpoints and `pricing_service.py` for the tariff
-table itself.
+stored on the row. If the tariff/printing configuration changes later, already-created letters
+keep the price they were created with — nothing is recomputed retroactively. See `docs/api.md` for
+the pricing endpoints and `pricing_service.py` for the tariff table itself.
 
 ## `documents`
 One-to-one with `letters` (unique FK). Stores `original_filename` (display only),

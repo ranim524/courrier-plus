@@ -95,6 +95,7 @@ def confirm_payment(db: Session, transaction_id: str, outcome: str) -> Payment:
             letter.sender_first_name,
             letter.reference,
             f"{letter.recipient_first_name} {letter.recipient_last_name}",
+            letter.page_count,
             float(payment.amount),
             payment.currency,
             tracking_url,

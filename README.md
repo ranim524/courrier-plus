@@ -99,31 +99,46 @@ See `backend/.env.example` and `frontend/.env.example`. Key ones:
 
 ## Pricing
 
-Courrier+ prices each letter dynamically, modeled on the Tunisian Post's weight-based registered-mail
-tariff:
+Courrier+ actually prints the uploaded PDF, puts it in an envelope, and sends it as physical
+registered mail — the price reflects that real physical service:
 
 ```
-TOTAL = postage (by estimated weight) + registered-mail fee (3.000 TND) + AR fee (2.500 TND, optional)
+TOTAL = printing cost + paper cost + envelope cost + postage (by estimated weight)
+        + registered-mail fee (3.000 TND) + AR fee (2.500 TND, optional)
+        + delivery fee + Courrier+ service fee
 ```
 
-Since Courrier+ is digital, weight is **estimated** from the PDF's page count
-(`ESTIMATED_GRAMS_PER_PAGE = 5`, configurable in `app/services/pricing_service.py`) — a
-text-only letter is priced as a single page. The backend always determines the page count itself
-from the uploaded PDF bytes; it never trusts a price, page count, or weight sent by the client.
-Maximum document size accepted: 400 pages (2000g equivalent).
+The backend determines everything server-side and never trusts a price, page count, sheet count,
+or weight sent by the client:
+
+1. Count the PDF's pages (`pypdf`, never from the client).
+2. Convert pages to physical sheets — `sheet_count = page_count` (simplex, default) or
+   `ceil(page_count / 2)` (duplex).
+3. Estimate the physical weight — `sheet_count × 5g (paper) + 10g (envelope)` ("poids estimé", not
+   a scale reading).
+4. Match the Tunisian Post internal-letter weight bracket for postage.
+5. Sum printing (`0.150 TND/page`), paper (`0.050 TND/sheet`), envelope (`0.500 TND`), postage,
+   the mandatory registered-mail fee, optional AR fee, delivery fee (currently `0`, included in
+   postage), and the Courrier+ service fee (`1.000 TND`).
+
+Maximum document weight accepted: 2000g (~398 pages simplex, ~796 duplex — the limit is on weight,
+not a fixed page count, since duplex fits roughly twice as many pages per envelope).
 
 - `POST /api/pricing/preview` — live price preview used by the send-letter wizard as the sender
   uploads a PDF or toggles "Avec accusé de réception".
 - `POST /api/pricing/calculate` — pure calculation from an already-known page count.
 
-The computed breakdown (`page_count`, `estimated_weight_g`, `weight_bracket`, `base_postage`,
-`registered_fee`, `acknowledgment_fee`, `total_amount`) is stored on the `letters` row as a
-snapshot at creation time — see `docs/database.md`. If the tariff table changes later, letters
-already created keep their original price.
+All constants (printing/paper/envelope costs, postal tariff table, service fee, etc.) are
+centralized in `app/services/pricing_service.py` — **initial prototype defaults, not verified
+market prices**. The full breakdown is stored on the `letters` row as a snapshot at creation time
+— see `docs/database.md`. If the tariff/printing configuration changes later, letters already
+created keep their original price.
 
-> Courrier+'s page-based weight estimate is a pricing convention inspired by the Tunisian Post
-> tariff table. It does not represent the actual physical weight of a printed document, and does
-> not by itself establish legal equivalence with physical registered mail.
+> Courrier+'s paper/envelope weight model is an estimate ("poids estimé"), not the letter's actual
+> weighed mass, and the postal tariff values are prototype defaults inspired by the Tunisian Post
+> tariff table — verify them before real production use. Courrier+ digitizes the ordering,
+> tracking and notification experience around a real physical mailing; it does not by itself
+> establish legal equivalence with an official La Poste Tunisienne registered letter.
 
 ## Resend setup
 

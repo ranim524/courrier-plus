@@ -83,6 +83,17 @@ export function AdminLetterDetail() {
               <p className="font-semibold text-slate-800">{letter.page_count}</p>
             </div>
             <div>
+              <p className="text-xs text-slate-400">Feuillets</p>
+              <p className="font-semibold text-slate-800">{letter.sheet_count}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400">Impression</p>
+              <p className="font-semibold text-slate-800">
+                {letter.printing_mode === "color" ? "Couleur" : "Noir et blanc"} —{" "}
+                {letter.printing_sides === "double" ? "Recto-verso" : "Recto"}
+              </p>
+            </div>
+            <div>
               <p className="text-xs text-slate-400">Poids estimé</p>
               <p className="font-semibold text-slate-800">{letter.estimated_weight_g} g</p>
             </div>
@@ -97,21 +108,51 @@ export function AdminLetterDetail() {
           </div>
           <div className="mt-4 flex flex-col gap-1.5 border-t border-slate-100 pt-4 text-sm">
             <div className="flex justify-between">
+              <span className="text-slate-500">Impression</span>
+              <span className="text-slate-800">
+                {letter.printing_cost.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Papier</span>
+              <span className="text-slate-800">
+                {letter.paper_cost.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Enveloppe</span>
+              <span className="text-slate-800">
+                {letter.envelope_cost.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-slate-500">Affranchissement</span>
               <span className="text-slate-800">
-                {letter.base_postage.toFixed(3)} {letter.currency}
+                {letter.postal_postage.toFixed(3)} {letter.currency}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Recommandation</span>
               <span className="text-slate-800">
-                {letter.registered_fee.toFixed(3)} {letter.currency}
+                {letter.registered_mail_fee.toFixed(3)} {letter.currency}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Accusé de réception</span>
               <span className="text-slate-800">
                 {letter.acknowledgment_fee.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Livraison</span>
+              <span className="text-slate-800">
+                {letter.delivery_fee.toFixed(3)} {letter.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Frais de service Courrier+</span>
+              <span className="text-slate-800">
+                {letter.service_fee.toFixed(3)} {letter.currency}
               </span>
             </div>
             <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 font-semibold">

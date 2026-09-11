@@ -5,6 +5,7 @@ def render_payment_confirmation(
     sender_first_name: str,
     reference: str,
     recipient_full_name: str,
+    page_count: int,
     amount: float,
     currency: str,
     tracking_url: str,
@@ -13,12 +14,13 @@ def render_payment_confirmation(
     subject = f"Courrier+ — Paiement confirmé ({reference})"
     body = f"""
       <p>Bonjour {sender_first_name},</p>
-      <p>Votre paiement a été confirmé et votre courrier a été créé avec succès.</p>
+      <p>Votre paiement a été confirmé et votre courrier a été créé avec succès. Il va être imprimé et envoyé par courrier recommandé.</p>
       <table role="presentation" width="100%" style="margin:16px 0;font-size:14px;">
         <tr><td style="color:#6b7280;padding:4px 0;">Référence</td><td style="font-weight:bold;">{reference}</td></tr>
         <tr><td style="color:#6b7280;padding:4px 0;">Destinataire</td><td>{recipient_full_name}</td></tr>
+        <tr><td style="color:#6b7280;padding:4px 0;">Nombre de pages</td><td>{page_count}</td></tr>
         <tr><td style="color:#6b7280;padding:4px 0;">Date</td><td>{sent_date}</td></tr>
-        <tr><td style="color:#6b7280;padding:4px 0;">Montant</td><td>{amount:.2f} {currency}</td></tr>
+        <tr><td style="color:#6b7280;padding:4px 0;">Montant</td><td>{amount:.3f} {currency}</td></tr>
       </table>
       <p><a href="{tracking_url}" style="background-color:{ACCENT_COLOR};color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Suivre mon courrier</a></p>
     """

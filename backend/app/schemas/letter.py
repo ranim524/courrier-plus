@@ -59,12 +59,22 @@ class LetterRead(BaseModel):
     content_type: DocumentSourceType
     status: LetterStatus
     page_count: int
-    estimated_weight_g: int
+    sheet_count: int
+    printing_mode: str
+    printing_sides: str
+    paper_weight_g: float
+    envelope_weight_g: float
+    estimated_weight_g: float
     weight_bracket: str
-    base_postage: float
-    registered_fee: float
+    printing_cost: float
+    paper_cost: float
+    envelope_cost: float
+    postal_postage: float
+    registered_mail_fee: float
     acknowledgment_of_receipt: bool
     acknowledgment_fee: float
+    delivery_fee: float
+    service_fee: float
     total_amount: float
     currency: str
     created_at: datetime

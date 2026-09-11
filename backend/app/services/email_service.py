@@ -61,13 +61,14 @@ def send_payment_confirmation(
     sender_first_name: str,
     reference: str,
     recipient_full_name: str,
+    page_count: int,
     amount: float,
     currency: str,
     tracking_url: str,
     sent_date: str,
 ) -> EmailEvent:
     subject, html = render_payment_confirmation(
-        sender_first_name, reference, recipient_full_name, amount, currency, tracking_url, sent_date
+        sender_first_name, reference, recipient_full_name, page_count, amount, currency, tracking_url, sent_date
     )
     return _send(db, letter_id, EmailType.PAYMENT_CONFIRMATION, sender_email, subject, html)
 

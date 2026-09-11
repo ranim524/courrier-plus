@@ -49,12 +49,22 @@ export interface LetterRead {
   content_type: ContentType
   status: LetterStatus
   page_count: number
+  sheet_count: number
+  printing_mode: string
+  printing_sides: string
+  paper_weight_g: number
+  envelope_weight_g: number
   estimated_weight_g: number
   weight_bracket: string
-  base_postage: number
-  registered_fee: number
+  printing_cost: number
+  paper_cost: number
+  envelope_cost: number
+  postal_postage: number
+  registered_mail_fee: number
   acknowledgment_of_receipt: boolean
   acknowledgment_fee: number
+  delivery_fee: number
+  service_fee: number
   total_amount: number
   currency: string
   created_at: string

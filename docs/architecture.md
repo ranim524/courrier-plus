@@ -63,6 +63,43 @@ RECIPIENT confirms receipt → Letter → RECEIVED, RECEIPT_CONFIRMED event
 Every transition is explicit and validated by `app/services/letter_state.py` — an invalid jump
 (e.g. RECEIVED before OPENED) is rejected with HTTP 409, never silently allowed.
 
+## Pricing model
+
+Courrier+ physically prints the uploaded PDF, puts it in an envelope, and sends it as real
+registered mail — the price reflects that physical service, computed entirely in
+`app/services/pricing_service.py::calculate_letter_price()`:
+
+```
+PDF pages
+   │  (server-side page count via pypdf — never trusted from the client)
+   ▼
+physical sheets            sheet_count = page_count (simplex) or ceil(page_count/2) (duplex)
+   │
+   ▼
+paper weight + envelope weight   → estimated_weight_g ("poids estimé", not a scale reading)
+   │
+   ▼
+postal weight bracket      → postal_postage (Tunisian internal-letter tariff, prototype defaults)
+   │
+   ▼
+printing_cost + paper_cost + envelope_cost + postal_postage + registered_mail_fee
+   + acknowledgment_fee (optional) + delivery_fee + service_fee
+   =
+total_amount
+```
+
+All the constants along this pipeline (`PRINTING_COST_BW_PER_PAGE`, `PAPER_WEIGHT_PER_SHEET_G`,
+`ENVELOPE_COST`, `POSTAL_TARIFFS`, `COURRIER_PLUS_SERVICE_FEE`, etc.) are centralized at the top of
+`pricing_service.py` — nowhere else in the codebase hard-codes a price. They are **initial
+prototype defaults**, not verified official market prices; an admin settings screen to edit them
+is the natural next step, documented as a TODO rather than built speculatively (see
+`docs/deployment.md`).
+
+The frontend only ever displays a breakdown returned by `POST /api/pricing/preview` — it never
+computes a page count, weight, or price itself. `POST /api/letters` has no price/weight/page-count
+field a client could set; the backend always re-derives everything from the actual uploaded PDF
+bytes. See `docs/api.md` and `docs/database.md`.
+
 ## Payment & storage abstractions
 
 - **Payment**: `PaymentProvider` interface (`app/services/payment/base.py`) with a `MockPaymentProvider`
