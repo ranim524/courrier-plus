@@ -9,6 +9,9 @@ import { Home } from "./pages/Home"
 import { TrackResult } from "./pages/TrackResult"
 import { TrackSearch } from "./pages/TrackSearch"
 import { AdminDashboard } from "./pages/admin/AdminDashboard"
+import { AdminDeliveries } from "./pages/admin/AdminDeliveries"
+import { AdminDeliveryAgents } from "./pages/admin/AdminDeliveryAgents"
+import { AdminDeliveryDetail } from "./pages/admin/AdminDeliveryDetail"
 import { AdminEvents } from "./pages/admin/AdminEvents"
 import { AdminLetterDetail } from "./pages/admin/AdminLetterDetail"
 import { AdminLetters } from "./pages/admin/AdminLetters"
@@ -52,6 +55,9 @@ export default function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="letters" element={<AdminLetters />} />
             <Route path="letters/:id" element={<AdminLetterDetail />} />
+            <Route path="deliveries" element={<AdminDeliveries />} />
+            <Route path="deliveries/:id" element={<AdminDeliveryDetail />} />
+            <Route path="delivery-agents" element={<AdminDeliveryAgents />} />
             <Route path="payments" element={<AdminPayments />} />
             <Route path="events" element={<AdminEvents />} />
           </Route>

@@ -11,7 +11,7 @@ from app.models.enums import ActorType, LetterEventType, LetterStatus
 from app.models.letter import Letter
 from app.repositories import access_token_repository, letter_repository
 from app.schemas.tracking import AccessLetterView
-from app.services import audit_service, email_service, letter_state
+from app.services import audit_service, delivery_service, email_service, letter_state
 
 settings = get_settings()
 
@@ -49,7 +49,10 @@ def get_letter_for_token(db: Session, raw_token: str) -> Letter:
     return letter
 
 
-def _to_view(letter: Letter) -> AccessLetterView:
+def _to_view(letter: Letter, db: Session) -> AccessLetterView:
+    delivery_order = delivery_service.get_delivery_for_letter(db, letter.id)
+    delivery_view = delivery_service.to_public_view(delivery_order) if delivery_order else None
+
     return AccessLetterView(
         reference=letter.reference or "",
         sender_first_name=letter.sender_first_name,
@@ -60,6 +63,7 @@ def _to_view(letter: Letter) -> AccessLetterView:
         has_document=letter.document is not None,
         acknowledgment_of_receipt=letter.acknowledgment_of_receipt,
         created_at=letter.created_at,
+        delivery=delivery_view,
     )
 
 
@@ -72,7 +76,7 @@ def view_letter(db: Session, raw_token: str, ip_address: str | None, user_agent:
     )
     db.commit()
 
-    return _to_view(letter)
+    return _to_view(letter, db)
 
 
 def mark_opened(db: Session, raw_token: str, ip_address: str | None, user_agent: str | None) -> AccessLetterView:
@@ -91,7 +95,7 @@ def mark_opened(db: Session, raw_token: str, ip_address: str | None, user_agent:
     db.commit()
     db.refresh(letter)
 
-    return _to_view(letter)
+    return _to_view(letter, db)
 
 
 def confirm_receipt(db: Session, raw_token: str, ip_address: str | None, user_agent: str | None) -> AccessLetterView:
@@ -108,7 +112,7 @@ def confirm_receipt(db: Session, raw_token: str, ip_address: str | None, user_ag
         )
 
     if letter.status == LetterStatus.RECEIVED:
-        return _to_view(letter)
+        return _to_view(letter, db)
 
     if letter.status != LetterStatus.OPENED:
         raise ConflictError(
@@ -134,4 +138,4 @@ def confirm_receipt(db: Session, raw_token: str, ip_address: str | None, user_ag
     db.commit()
     db.refresh(letter)
 
-    return _to_view(letter)
+    return _to_view(letter, db)

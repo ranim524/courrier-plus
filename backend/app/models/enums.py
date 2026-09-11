@@ -50,6 +50,18 @@ class LetterEventType(str, enum.Enum):
     ADMIN_VIEWED_LETTER = "ADMIN_VIEWED_LETTER"
     LETTER_CANCELLED = "LETTER_CANCELLED"
     LETTER_REFUSED = "LETTER_REFUSED"
+    # Physical delivery (see app/services/delivery_service.py). Reuses this
+    # same audit table/enum rather than a separate delivery_events table --
+    # every delivery event is already scoped to exactly one letter.
+    DELIVERY_CREATED = "DELIVERY_CREATED"
+    DELIVERY_ASSIGNED = "DELIVERY_ASSIGNED"
+    DELIVERY_PICKED_UP = "DELIVERY_PICKED_UP"
+    DELIVERY_IN_TRANSIT = "DELIVERY_IN_TRANSIT"
+    DELIVERY_OUT_FOR_DELIVERY = "DELIVERY_OUT_FOR_DELIVERY"
+    DELIVERY_FAILED = "DELIVERY_FAILED"
+    DELIVERY_DELIVERED = "DELIVERY_DELIVERED"
+    DELIVERY_RETURNED = "DELIVERY_RETURNED"
+    DELIVERY_CANCELLED = "DELIVERY_CANCELLED"
 
 
 class EmailType(str, enum.Enum):
@@ -58,9 +70,50 @@ class EmailType(str, enum.Enum):
     LETTER_OPENED = "LETTER_OPENED"
     RECEIPT_CONFIRMED = "RECEIPT_CONFIRMED"
     SYSTEM_ERROR = "SYSTEM_ERROR"
+    DELIVERY_CONFIRMED_RECIPIENT = "DELIVERY_CONFIRMED_RECIPIENT"
+    DELIVERY_CONFIRMED_SENDER = "DELIVERY_CONFIRMED_SENDER"
 
 
 class EmailStatus(str, enum.Enum):
     PENDING = "PENDING"
     SENT = "SENT"
     FAILED = "FAILED"
+
+
+class DeliveryStatus(str, enum.Enum):
+    """Detailed physical-delivery state machine -- separate from, but linked
+    to, LetterStatus (see app/services/delivery_state.py). Only DELIVERED
+    means the physical letter actually reached the recipient."""
+
+    CREATED = "CREATED"
+    READY_FOR_DISPATCH = "READY_FOR_DISPATCH"
+    ASSIGNED = "ASSIGNED"
+    PICKED_UP = "PICKED_UP"
+    IN_TRANSIT = "IN_TRANSIT"
+    OUT_FOR_DELIVERY = "OUT_FOR_DELIVERY"
+    DELIVERED = "DELIVERED"
+    DELIVERY_FAILED = "DELIVERY_FAILED"
+    RETURNED_TO_SENDER = "RETURNED_TO_SENDER"
+    CANCELLED = "CANCELLED"
+
+
+class DeliveryProviderType(str, enum.Enum):
+    INTERNAL = "INTERNAL"
+    EXTERNAL_CARRIER = "EXTERNAL_CARRIER"
+    POSTAL_SERVICE = "POSTAL_SERVICE"
+
+
+class ProofOfDeliveryType(str, enum.Enum):
+    MANUAL_CONFIRMATION = "MANUAL_CONFIRMATION"
+    SIGNATURE = "SIGNATURE"
+    OTP = "OTP"
+    PHOTO = "PHOTO"
+    EXTERNAL_PROVIDER_CONFIRMATION = "EXTERNAL_PROVIDER_CONFIRMATION"
+
+
+class DeliveryFailureReason(str, enum.Enum):
+    RECIPIENT_UNAVAILABLE = "RECIPIENT_UNAVAILABLE"
+    INCORRECT_ADDRESS = "INCORRECT_ADDRESS"
+    RECIPIENT_REFUSED = "RECIPIENT_REFUSED"
+    ADDRESS_INACCESSIBLE = "ADDRESS_INACCESSIBLE"
+    OTHER = "OTHER"

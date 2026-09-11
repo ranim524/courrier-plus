@@ -1,4 +1,5 @@
 import type { LetterStatus } from "./letter"
+import type { DeliveryPublicView } from "./delivery"
 
 export interface TrackingEvent {
   event_type: string
@@ -16,6 +17,7 @@ export interface TrackingRead {
   recipient_last_name: string
   created_at: string
   events: TrackingEvent[]
+  delivery: DeliveryPublicView | null
 }
 
 export interface AccessLetterView {
@@ -28,4 +30,5 @@ export interface AccessLetterView {
   has_document: boolean
   acknowledgment_of_receipt: boolean
   created_at: string
+  delivery: DeliveryPublicView | null
 }

@@ -6,7 +6,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.rate_limit import limiter
-from app.routes import access, admin, config, letters, payments, pricing, tracking
+from app.routes import access, admin, config, delivery, letters, payments, pricing, tracking
 
 settings = get_settings()
 
@@ -44,6 +44,9 @@ app.include_router(access.router)
 app.include_router(admin.router)
 app.include_router(config.router)
 app.include_router(pricing.router)
+app.include_router(delivery.router)
+app.include_router(delivery.providers_router)
+app.include_router(delivery.agents_router)
 
 
 @app.get("/api/health", tags=["health"])

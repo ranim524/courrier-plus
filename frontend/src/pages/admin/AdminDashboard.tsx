@@ -16,6 +16,17 @@ const CARDS: { key: keyof DashboardStats; label: string }[] = [
   { key: "failed_letters", label: "Échoués" },
 ]
 
+const DELIVERY_CARDS: { key: keyof DashboardStats; label: string }[] = [
+  { key: "total_deliveries", label: "Total livraisons" },
+  { key: "deliveries_ready_for_dispatch", label: "Prêtes à expédier" },
+  { key: "deliveries_assigned", label: "Affectées" },
+  { key: "deliveries_in_transit", label: "En transit" },
+  { key: "deliveries_out_for_delivery", label: "En cours de livraison" },
+  { key: "deliveries_delivered", label: "Livrées" },
+  { key: "deliveries_failed", label: "Échecs" },
+  { key: "deliveries_returned", label: "Retournées" },
+]
+
 export function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -52,6 +63,16 @@ export function AdminDashboard() {
             {stats.total_revenue.toFixed(2)} {stats.currency}
           </p>
         </div>
+      </div>
+
+      <h2 className="mt-8 text-lg font-bold text-slate-800">Livraisons</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {DELIVERY_CARDS.map((card) => (
+          <div key={card.key} className="rounded-xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{card.label}</p>
+            <p className="mt-2 text-2xl font-bold text-slate-800">{stats[card.key]}</p>
+          </div>
+        ))}
       </div>
     </div>
   )

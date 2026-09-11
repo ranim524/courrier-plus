@@ -4,6 +4,8 @@ import { useAuth } from "../hooks/useAuth"
 const NAV_ITEMS = [
   { to: "/admin", label: "Tableau de bord", end: true },
   { to: "/admin/letters", label: "Courriers" },
+  { to: "/admin/deliveries", label: "Livraisons" },
+  { to: "/admin/delivery-agents", label: "Livreurs" },
   { to: "/admin/payments", label: "Paiements" },
   { to: "/admin/events", label: "E-mails & évènements" },
 ]

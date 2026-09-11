@@ -32,10 +32,36 @@ def _ensure_test_database() -> None:
     admin_engine.dispose()
 
 
+def _seed_reference_data() -> None:
+    """The test DB schema is built directly from ORM metadata (create_all),
+    not by running Alembic migrations -- so seed data an actual migration
+    inserts (like the default delivery provider) must be re-seeded here too."""
+    from app.models.delivery import DeliveryProvider
+    from app.models.enums import DeliveryProviderType
+
+    db = TestingSessionLocal()
+    try:
+        existing = db.query(DeliveryProvider).filter_by(code="courrier_plus_internal").first()
+        if existing is None:
+            db.add(
+                DeliveryProvider(
+                    code="courrier_plus_internal",
+                    name="Courrier+ Delivery",
+                    provider_type=DeliveryProviderType.INTERNAL,
+                    active=True,
+                    api_enabled=False,
+                )
+            )
+            db.commit()
+    finally:
+        db.close()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_database():
     _ensure_test_database()
     Base.metadata.create_all(bind=engine)
+    _seed_reference_data()
     yield
     Base.metadata.drop_all(bind=engine)
 

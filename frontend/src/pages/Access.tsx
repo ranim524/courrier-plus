@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
 import { Button } from "../components/Button"
+import { DeliveryTimeline } from "../components/DeliveryTimeline"
 import { ErrorMessage } from "../components/ErrorMessage"
 import { LoadingSpinner } from "../components/LoadingSpinner"
 import { StatusBadge } from "../components/StatusBadge"
@@ -101,6 +102,12 @@ export function Access() {
           </p>
         )}
       </div>
+
+      {letter.delivery && (
+        <div className="mt-6">
+          <DeliveryTimeline delivery={letter.delivery} />
+        </div>
+      )}
     </div>
   )
 }

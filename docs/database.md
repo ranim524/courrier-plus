@@ -97,6 +97,47 @@ optional `ip_address`/`user_agent`, and a `event_metadata` JSONB column for extr
 One row per email attempt. `email_type` (enum), `recipient`, `status` (`PENDING`/`SENT`/`FAILED`),
 `provider_message_id`, and a safe `error_message` (no secrets).
 
+## Physical delivery tables
+
+See `docs/architecture.md`'s "Physical delivery system" section and `.claude/skills/delivery/SKILL.md`
+for the full design rationale. `DeliveryOrder`'s detailed status is separate from, but linked to,
+`letters.status` (which only reflects the high-level `DELIVERED` milestone).
+
+### `delivery_providers`
+| Column | Type | Notes |
+|---|---|---|
+| code | varchar(50) | unique, stable identifier (`courrier_plus_internal` is seeded by migration) |
+| name | varchar(100) | display name, e.g. "Courrier+ Delivery" |
+| provider_type | enum | `INTERNAL` \| `EXTERNAL_CARRIER` \| `POSTAL_SERVICE` |
+| active | boolean | |
+| api_enabled | boolean | `false` for the manual provider |
+| api_base_url | varchar(255) | nullable — **never** a credential; a future carrier's API key lives in an env var, not here |
+
+### `delivery_agents`
+Couriers, admin-managed only (never exposed to senders/recipients). `provider_id` FK, `first_name`,
+`last_name`, `phone`, `email` (nullable), `active`.
+
+### `delivery_orders`
+One-to-one with `letters` (unique FK). `tracking_number` (unique, e.g. `CP-2026-0001847` — never the
+row's UUID), `provider_id` FK, `courier_id` FK (nullable until assigned), `status` (`DeliveryStatus`
+enum, indexed), `attempt_count`, and a timestamp column per major milestone: `assigned_at`,
+`picked_up_at`, `in_transit_at`, `out_for_delivery_at`, `delivered_at`, `failed_at`, `returned_at`
+(plus `created_at`/`updated_at` from the standard mixin). These timestamps are also what
+`delivery_service.to_public_view()` uses to build the public tracking timeline.
+
+### `delivery_attempts`
+One row per **failed** delivery attempt (a successful one gets a `proofs_of_delivery` row instead).
+`delivery_id` FK, `attempt_number`, `attempted_at`, `courier_id` (nullable), `reason`
+(`DeliveryFailureReason` enum), `notes` (nullable).
+
+### `proofs_of_delivery`
+One-to-one with `delivery_orders` (unique FK), created exactly once by the idempotent
+`confirm_delivery()`. `delivered_at`, `delivered_by` (the confirming admin's email),
+`recipient_name_if_provided` (nullable), `delivery_method` (nullable), `proof_type`
+(`MANUAL_CONFIRMATION` for the current prototype — the column also supports `SIGNATURE`/`OTP`/
+`PHOTO`/`EXTERNAL_PROVIDER_CONFIRMATION` for later, but only ever set to a type that was actually
+captured), `proof_reference` (nullable, for a future signature/photo file reference), `notes`.
+
 ## Relationships
 
 ```

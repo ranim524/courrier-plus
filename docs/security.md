@@ -60,7 +60,25 @@ contents. Structured log lines use safe context only (letter reference, event ty
 ### State machine
 Letter status transitions are validated against an explicit allow-list
 (`app/services/letter_state.py`). An out-of-order transition (e.g. confirming receipt before the
-letter was opened) is rejected with HTTP 409, not silently accepted.
+letter was opened) is rejected with HTTP 409, not silently accepted. The physical delivery state
+machine (`app/services/delivery_state.py`) follows the same pattern independently.
+
+### Physical delivery
+- Every delivery-mutating endpoint (`/api/admin/deliveries/*`, `/api/admin/delivery-agents/*`)
+  requires an admin JWT — enforced by the `get_current_admin` dependency on the backend, not by
+  hiding buttons in the UI. There is no sender/recipient-facing route that can change a delivery's
+  status.
+- Public tracking (`/api/track/{reference}`) and the recipient's secure-link view
+  (`/api/access/{token}`) only ever expose a `DeliveryPublicView` (tracking number, status, a
+  timestamp-only timeline) — never courier name/phone, admin confirmation notes, or internal
+  database IDs.
+- `DeliveryOrder.confirm_delivery()` (the only path that can send a "your letter was delivered"
+  email) is idempotent: a repeated confirmation never creates a duplicate `ProofOfDelivery`, audit
+  event, or notification email — same idempotency discipline as payment confirmation above.
+- No delivery-provider API credentials are stored in the database, even as the system becomes
+  ready for a real external carrier (`DeliveryProvider.api_enabled`) — they belong in environment
+  variables, referenced by the provider's `code`, following the same rule as every other secret in
+  this project (never in source, never in Git, never logged).
 
 ## Privacy
 

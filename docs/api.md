@@ -61,8 +61,8 @@ an immutable snapshot, and `docs/architecture.md` for the page → sheet → wei
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/track/{reference}` | Public tracking info + event timeline for a letter reference. |
-| GET | `/api/access/{token}` | Validates a recipient access token, records an access event, returns letter content. |
+| GET | `/api/track/{reference}` | Public tracking info + event timeline for a letter reference. Includes a `delivery` object (tracking number, status, timeline) once a `DeliveryOrder` exists — no courier/admin info, see `docs/database.md`. |
+| GET | `/api/access/{token}` | Validates a recipient access token, records an access event, returns letter content. Includes the same safe `delivery` object. |
 | POST | `/api/access/{token}/open` | Marks the letter as `OPENED`, notifies the sender by email. |
 | POST | `/api/access/{token}/receive` | Marks the letter as `RECEIVED`, notifies the sender by email. **Only available if the letter was created with `acknowledgment_of_receipt: true`** — otherwise returns `403`, since a delivery proof is a paid, opt-in service (see `docs/database.md`). |
 | GET | `/api/access/{token}/document` | Streams the attached PDF, if any, for a valid token. |
@@ -80,6 +80,32 @@ an immutable snapshot, and `docs/architecture.md` for the page → sheet → wei
 | GET | `/api/admin/letters/{id}/document` | Streams the attached PDF (admin-authorized). |
 | GET | `/api/admin/payments` | Paginated payment list. |
 | GET | `/api/admin/emails` | Paginated email event list across all letters. |
+
+## Admin — Physical delivery (JWT-protected)
+
+See `.claude/skills/delivery/SKILL.md` and `docs/architecture.md` for the full design.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/admin/deliveries` | Paginated, filterable (`status`, `provider_id`, `courier_id`, `search`) delivery list. |
+| GET | `/api/admin/deliveries/{id}` | Full delivery detail: provider, courier, timestamps, attempts, proof. |
+| POST | `/api/admin/deliveries/{id}/assign` | `{"agent_id"}` → `ASSIGNED`. |
+| POST | `/api/admin/deliveries/{id}/pickup` | → `PICKED_UP`. |
+| POST | `/api/admin/deliveries/{id}/in-transit` | → `IN_TRANSIT`. |
+| POST | `/api/admin/deliveries/{id}/out-for-delivery` | → `OUT_FOR_DELIVERY`. |
+| POST | `/api/admin/deliveries/{id}/confirm-delivery` | `{"notes"?}` → `DELIVERED`. **The only endpoint that can trigger the delivery-confirmed emails.** Idempotent: confirming an already-`DELIVERED` order is a no-op. |
+| POST | `/api/admin/deliveries/{id}/fail` | `{"reason", "notes"?}` → `DELIVERY_FAILED`, creates a `DeliveryAttempt`. |
+| POST | `/api/admin/deliveries/{id}/retry` | `DELIVERY_FAILED` → `OUT_FOR_DELIVERY` (next attempt). |
+| POST | `/api/admin/deliveries/{id}/return` | `DELIVERY_FAILED` → `RETURNED_TO_SENDER`. |
+| POST | `/api/admin/deliveries/{id}/cancel` | Cancels an early-stage delivery (`CREATED`/`READY_FOR_DISPATCH`/`ASSIGNED` only). |
+| GET | `/api/admin/delivery-providers` | Lists delivery providers (seeded with one: `courrier_plus_internal`). |
+| GET | `/api/admin/delivery-agents` | Lists couriers. |
+| POST | `/api/admin/delivery-agents` | Creates a courier. |
+| PATCH | `/api/admin/delivery-agents/{id}` | `{"active"}` — activate/deactivate a courier. |
+
+Every state-changing endpoint above validates the transition against `delivery_state.py`'s
+explicit allow-list — an out-of-order call (e.g. confirming delivery before `OUT_FOR_DELIVERY`)
+returns `409`, same convention as the letter state machine.
 
 ## Health
 

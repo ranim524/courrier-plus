@@ -1,5 +1,6 @@
 from app.models.access_token import AccessToken
 from app.models.admin import Admin
+from app.models.delivery import DeliveryAgent, DeliveryAttempt, DeliveryOrder, DeliveryProvider, ProofOfDelivery
 from app.models.document import Document
 from app.models.document_blob import DocumentBlob
 from app.models.email_event import EmailEvent
@@ -16,4 +17,9 @@ __all__ = [
     "AccessToken",
     "LetterEvent",
     "EmailEvent",
+    "DeliveryProvider",
+    "DeliveryAgent",
+    "DeliveryOrder",
+    "DeliveryAttempt",
+    "ProofOfDelivery",
 ]

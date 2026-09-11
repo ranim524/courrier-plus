@@ -27,8 +27,18 @@ After implementing or changing any backend behavior; before considering a phase 
 - Admin: login success/failure, unauthorized access to admin routes without token.
 - Resend failure handling (simulate exception, assert graceful degradation + `email_events` FAILED row).
 - End-to-end happy path per `docs/architecture.md` (create → pay → sent → opened → received → sender notified).
+- **Physical delivery (see [[delivery]])**: full status walk (assign → pickup → in-transit → out-for-delivery → confirm), invalid transitions rejected, tracking number uniqueness. **Critical test**: no delivery-confirmed email at any status before `DELIVERED`, exactly one recipient + one sender email on confirm, no duplicate on a repeated confirm call (`test_delivery_routes.py::test_no_delivery_email_before_delivered_then_exactly_one_on_confirm`) — this is the single most important delivery test, don't skip or weaken it.
+
+## Testing gotcha: Postgres enum values
+The test DB is built via `Base.metadata.create_all()`, which creates every enum type fresh from
+the current Python definition — this **masks** a real gap: adding a new Python-side enum member
+(`LetterEventType`, `EmailType`, etc.) does not alter an already-migrated Postgres enum type in a
+real deployment. Tests will pass even if you forgot the `ALTER TYPE ... ADD VALUE` migration; only
+running the app live against the dev DB catches it. Always verify a new enum member against the
+real dev DB (create a row using it), not just `pytest`, before considering it done.
 
 ## Workflow
 1. Write/extend the test alongside the feature (not after everything is built).
 2. Run `pytest -q` from `backend/`.
 3. Fix failures before moving to the next phase.
+4. For a new enum member, also verify live against the dev DB (see gotcha above).

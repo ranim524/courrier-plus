@@ -22,8 +22,12 @@ without either party needing an account.
   receipt confirmed), with a safe mock mode when no API key is configured.
 - Abstracted mock payment provider (idempotent), designed to be swapped for a real Tunisian
   provider later without touching the rest of the app.
+- Physical delivery system: Courrier+ prints and physically delivers the letter — delivery orders,
+  couriers, a validated state machine (`ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY →
+  DELIVERED`), proof of delivery, and delivery-confirmed emails that only ever fire once the
+  physical letter is actually confirmed delivered. See "Physical delivery" below.
 - Admin dashboard: stats, letters (search/filter/paginate), letter detail with document hash and
-  full event/email history, payments, email log.
+  full event/email history, deliveries (assign/track/confirm), payments, email log.
 
 ## Architecture
 
@@ -140,6 +144,31 @@ created keep their original price.
 > tracking and notification experience around a real physical mailing; it does not by itself
 > establish legal equivalence with an official La Poste Tunisienne registered letter.
 
+## Physical delivery
+
+Courrier+ prints the uploaded PDF and physically delivers it — this is tracked as a `DeliveryOrder`,
+separate from (but linked to) the letter's own lifecycle:
+
+```
+Letter SENT (auto-creates the DeliveryOrder)
+  → READY_FOR_DISPATCH → ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY
+  → DELIVERED (proof of delivery + delivery-confirmed emails)
+```
+or, on a failed attempt: `OUT_FOR_DELIVERY → DELIVERY_FAILED → (retry) or RETURNED_TO_SENDER`.
+
+**Only `DELIVERED` means the recipient actually received the physical letter** — no earlier status
+sends a "your letter was delivered" email, and the confirmation is idempotent (repeating it never
+sends a duplicate). Admins manage the whole flow from **Admin → Livraisons** (assign a courier,
+advance status, confirm delivery) and **Admin → Livreurs** (add/deactivate couriers). The public
+tracking page and the recipient's secure link both show the delivery status/timeline, without any
+courier or admin-only details.
+
+Phase 1 ships one seeded provider, "Courrier+ Delivery" (manual/internal — every status change is
+a direct admin action, labeled "suivi manuel" in the UI since there's no real-time carrier feed).
+The provider is abstracted (`app/services/delivery/`, `BaseDeliveryProvider`) so a real external
+carrier can be added later as a new provider class + DB row without touching the delivery service,
+routes, or admin UI above it. See `docs/architecture.md` and `.claude/skills/delivery/SKILL.md`.
+
 ## Resend setup
 
 1. Create a Resend account and a verified sending domain.
@@ -201,4 +230,4 @@ idempotent payments, and the legal/certification disclaimer).
 
 Project-specific Skills used throughout development live in `.claude/skills/`: project-setup,
 backend-development, database, frontend-development, security, resend-email,
-document-management, payment, testing, deployment, code-review, documentation.
+document-management, payment, delivery, testing, deployment, code-review, documentation.

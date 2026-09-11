@@ -16,6 +16,14 @@ export interface DashboardStats {
   total_payments: number
   total_revenue: number
   currency: string
+  total_deliveries: number
+  deliveries_ready_for_dispatch: number
+  deliveries_assigned: number
+  deliveries_in_transit: number
+  deliveries_out_for_delivery: number
+  deliveries_delivered: number
+  deliveries_failed: number
+  deliveries_returned: number
 }
 
 export interface LetterEventRead {

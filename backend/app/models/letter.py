@@ -60,6 +60,7 @@ class Letter(UUIDPKMixin, TimestampMixin, Base):
 
     document = relationship("Document", back_populates="letter", uselist=False, cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="letter", cascade="all, delete-orphan")
+    delivery_order = relationship("DeliveryOrder", back_populates="letter", uselist=False, cascade="all, delete-orphan")
     access_tokens = relationship("AccessToken", back_populates="letter", cascade="all, delete-orphan")
     events = relationship(
         "LetterEvent", back_populates="letter", cascade="all, delete-orphan", order_by="LetterEvent.created_at"

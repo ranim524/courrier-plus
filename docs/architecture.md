@@ -113,6 +113,55 @@ bytes. See `docs/api.md` and `docs/database.md`.
   (`document_service.py`) only ever use the interface, never a
   concrete class directly.
 
+## Physical delivery system
+
+Courrier+ actually prints the letter and delivers it physically — this is a distinct, linked
+subsystem from the payment/tracking flow above:
+
+```
+Letter (SENT)
+   │  auto-created by payment_service.confirm_payment()
+   ▼
+DeliveryOrder (CREATED -> READY_FOR_DISPATCH)
+   │  admin actions, app/services/delivery_service.py
+   ▼
+ASSIGNED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED
+   │                                         │
+   │                                         ▼
+   │                                  DELIVERY_FAILED -> RETURNED_TO_SENDER
+   ▼                                         │
+ProofOfDelivery                    (or back to OUT_FOR_DELIVERY for a retry)
+   │
+   ▼
+DELIVERY_CONFIRMED_RECIPIENT / DELIVERY_CONFIRMED_SENDER emails
+```
+
+- **Two linked, not duplicated, state machines.** `DeliveryOrder.status` (`DeliveryStatus`) holds the
+  detailed physical-delivery state; `Letter.status` only reflects the high-level `DELIVERED`
+  milestone by reusing the `LetterStatus.DELIVERED` member that already existed (dormant, sitting
+  between `SENT` and `OPENED`) before this module existed. `SENT` never means `DELIVERED` — only a
+  confirmed `DeliveryOrder.DELIVERED` can move the letter there.
+- **Only `DELIVERED` triggers the "your letter was delivered" emails.** No earlier status
+  (`ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) sends anything to the recipient/sender.
+  `delivery_service.confirm_delivery()` is the single, idempotent entry point that creates the
+  `ProofOfDelivery` and sends both emails exactly once.
+- **Provider abstraction** (`app/services/delivery/`): `BaseDeliveryProvider` with
+  `ManualDeliveryProvider` (phase 1 — no external API, every status change is a direct admin
+  action) as the only implementation today, selected by `DeliveryProvider.code`. A real carrier is
+  a new provider class + DB row later, with no change to `delivery_service.py` or the admin routes
+  above it. The UI labels this "suivi manuel" — it never implies real-time carrier tracking that
+  doesn't exist yet.
+- **Audit trail reuses `letter_events`** (no separate `delivery_events` table) — every delivery
+  event is already scoped to one letter, so the existing `LetterEventType` enum gained
+  `DELIVERY_CREATED` ... `DELIVERY_CANCELLED` members instead of a parallel table.
+- **Public tracking/access views** (`GET /api/track/{reference}`, `GET /api/access/{token}`) expose
+  a `DeliveryPublicView` derived only from `DeliveryOrder`'s own timestamp columns — never courier
+  name/phone, admin notes, or internal database IDs. All delivery-mutating endpoints
+  (`/api/admin/deliveries/*`, `/api/admin/delivery-agents/*`) require an admin JWT; there is no
+  sender/recipient-facing route that can change a delivery's status.
+
+See `.claude/skills/delivery/SKILL.md` and `docs/database.md` for the full schema.
+
 ## Admin vs. public surface
 
 Senders and recipients never authenticate — they act through the letter creation form and

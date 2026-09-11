@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.models.enums import ActorType, LetterEventType, LetterStatus
+from app.schemas.delivery import DeliveryPublicView
 
 
 class TrackingEvent(BaseModel):
@@ -24,6 +25,7 @@ class TrackingRead(BaseModel):
     recipient_last_name: str
     created_at: datetime
     events: list[TrackingEvent]
+    delivery: DeliveryPublicView | None = None
 
 
 class AccessLetterView(BaseModel):
@@ -36,3 +38,4 @@ class AccessLetterView(BaseModel):
     has_document: bool
     acknowledgment_of_receipt: bool
     created_at: datetime
+    delivery: DeliveryPublicView | None = None

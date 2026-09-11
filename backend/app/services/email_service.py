@@ -7,6 +7,8 @@ from app.core.logging import get_logger
 from app.models.email_event import EmailEvent
 from app.models.enums import EmailStatus, EmailType
 from app.repositories import email_event_repository
+from app.services.email_templates.delivery_confirmed_recipient import render_delivery_confirmed_recipient
+from app.services.email_templates.delivery_confirmed_sender import render_delivery_confirmed_sender
 from app.services.email_templates.letter_opened import render_letter_opened
 from app.services.email_templates.payment_confirmation import render_payment_confirmation
 from app.services.email_templates.receipt_confirmed import render_receipt_confirmed
@@ -103,3 +105,33 @@ def send_receipt_confirmed(
 def send_system_error(db: Session, letter_id: UUID, admin_email: str, reference: str, error_summary: str) -> EmailEvent:
     subject, html = render_system_error(reference, error_summary)
     return _send(db, letter_id, EmailType.SYSTEM_ERROR, admin_email, subject, html)
+
+
+def send_delivery_confirmed_recipient(
+    db: Session,
+    letter_id: UUID,
+    recipient_email: str,
+    reference: str,
+    tracking_number: str,
+    delivered_date: str,
+    delivered_time: str,
+) -> EmailEvent:
+    subject, html = render_delivery_confirmed_recipient(reference, tracking_number, delivered_date, delivered_time)
+    return _send(db, letter_id, EmailType.DELIVERY_CONFIRMED_RECIPIENT, recipient_email, subject, html)
+
+
+def send_delivery_confirmed_sender(
+    db: Session,
+    letter_id: UUID,
+    sender_email: str,
+    sender_first_name: str,
+    reference: str,
+    tracking_number: str,
+    delivered_date: str,
+    delivered_time: str,
+    tracking_url: str,
+) -> EmailEvent:
+    subject, html = render_delivery_confirmed_sender(
+        sender_first_name, reference, tracking_number, delivered_date, delivered_time, tracking_url
+    )
+    return _send(db, letter_id, EmailType.DELIVERY_CONFIRMED_SENDER, sender_email, subject, html)

@@ -36,3 +36,11 @@ class DashboardStats(BaseModel):
     total_payments: int
     total_revenue: float
     currency: str
+    total_deliveries: int
+    deliveries_ready_for_dispatch: int
+    deliveries_assigned: int
+    deliveries_in_transit: int
+    deliveries_out_for_delivery: int
+    deliveries_delivered: int
+    deliveries_failed: int
+    deliveries_returned: int

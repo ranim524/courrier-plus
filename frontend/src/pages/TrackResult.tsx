@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
+import { DeliveryTimeline } from "../components/DeliveryTimeline"
 import { ErrorMessage } from "../components/ErrorMessage"
 import { LoadingSpinner } from "../components/LoadingSpinner"
 import { StatusBadge } from "../components/StatusBadge"
@@ -58,6 +59,12 @@ export function TrackResult() {
         <h2 className="mb-6 text-sm font-semibold uppercase tracking-wide text-slate-400">Historique</h2>
         <Timeline events={tracking.events} />
       </div>
+
+      {tracking.delivery && (
+        <div className="mt-8">
+          <DeliveryTimeline delivery={tracking.delivery} />
+        </div>
+      )}
     </div>
   )
 }
