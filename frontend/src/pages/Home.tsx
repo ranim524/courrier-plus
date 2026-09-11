@@ -7,18 +7,18 @@ const STEPS = [
   },
   {
     title: "2. Payez en ligne",
-    text: "Réglez le tarif fixe de votre envoi de façon simple et sécurisée.",
+    text: "Le tarif est calculé automatiquement selon le nombre de pages, le mode d'impression et l'option d'accusé de réception, puis réglé en ligne en toute sécurité.",
   },
   {
     title: "3. Suivi en temps réel",
-    text: "Votre destinataire reçoit un lien sécurisé par e-mail, vous suivez chaque étape jusqu'à la confirmation de réception.",
+    text: "Courrier+ imprime et livre physiquement votre courrier. Vous suivez chaque étape jusqu'à la livraison, avec confirmation de réception si vous avez choisi l'accusé de réception.",
   },
 ]
 
 const BENEFITS = [
-  { title: "Rapide", text: "Votre courrier part en quelques minutes, sans détour par la poste." },
-  { title: "Traçable", text: "Chaque évènement clé est horodaté : envoi, ouverture, réception." },
-  { title: "Sécurisé", text: "Liens d'accès uniques, documents intègres (empreinte SHA-256), aucune donnée superflue." },
+  { title: "Rapide", text: "Votre courrier est pris en charge et envoyé à l'impression en quelques minutes après paiement." },
+  { title: "Traçable", text: "Chaque étape est horodatée, de la prise en charge à la livraison, visible sur la page de suivi." },
+  { title: "Sécurisé", text: "Documents intègres (empreinte SHA-256), aucun accès numérique au contenu pour le destinataire, aucune donnée superflue." },
   { title: "Sans compte", text: "Ni l'expéditeur ni le destinataire n'ont besoin de créer de compte." },
 ]
 
@@ -31,8 +31,8 @@ export function Home() {
             Le courrier recommandé numérique, réinventé pour la Tunisie
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-brand-100">
-            Envoyez un document important à quelqu'un en quelques minutes, avec preuve d'envoi, de consultation et de
-            réception — sans papier, sans file d'attente.
+            Envoyez un document important à quelqu'un en quelques minutes : Courrier+ l'imprime et le fait livrer
+            physiquement, avec preuve de dépôt et suivi jusqu'à la livraison — sans vous déplacer à la poste.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link

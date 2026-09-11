@@ -39,7 +39,10 @@ export function RecipientStep() {
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
       <StepProgress steps={SEND_STEPS} currentStep={STEP_NUMBERS.recipient} />
       <h1 className="mt-8 text-2xl font-bold text-slate-800">Informations du destinataire</h1>
-      <p className="mt-1 text-sm text-slate-500">Le destinataire recevra un lien sécurisé à cette adresse e-mail.</p>
+      <p className="mt-1 text-sm text-slate-500">
+        Cette adresse n'est utilisée que si vous choisissez l'accusé de réception, pour que le destinataire confirme
+        avoir bien reçu le courrier.
+      </p>
 
       <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
         <div className="grid gap-5 sm:grid-cols-2">

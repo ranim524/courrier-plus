@@ -20,7 +20,8 @@ export function SuccessStep() {
       </div>
       <h1 className="mt-6 text-2xl font-bold text-slate-800">Courrier envoyé avec succès</h1>
       <p className="mt-2 text-sm text-slate-500">
-        Votre destinataire a été notifié par e-mail. Vous recevrez une confirmation à chaque étape importante.
+        Votre courrier va être imprimé et livré physiquement à votre destinataire. Vous recevrez un e-mail de
+        confirmation une fois la livraison effectuée.
       </p>
 
       <div className="mt-8 flex flex-col items-center gap-3">
