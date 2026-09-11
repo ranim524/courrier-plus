@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.exceptions import ExpiredError, ForbiddenError, NotFoundError
+from app.core.exceptions import ConflictError, ExpiredError, ForbiddenError, NotFoundError
 from app.core.security import generate_secure_token, hash_token
 from app.models.access_token import AccessToken
 from app.models.enums import ActorType, LetterEventType, LetterStatus
@@ -49,6 +49,20 @@ def get_letter_for_token(db: Session, raw_token: str) -> Letter:
     return letter
 
 
+def _to_view(letter: Letter) -> AccessLetterView:
+    return AccessLetterView(
+        reference=letter.reference or "",
+        sender_first_name=letter.sender_first_name,
+        sender_last_name=letter.sender_last_name,
+        subject=letter.subject,
+        message=letter.message,
+        status=letter.status,
+        has_document=letter.document is not None,
+        acknowledgment_of_receipt=letter.acknowledgment_of_receipt,
+        created_at=letter.created_at,
+    )
+
+
 def view_letter(db: Session, raw_token: str, ip_address: str | None, user_agent: str | None) -> AccessLetterView:
     token, letter = _resolve_token(db, raw_token)
 
@@ -58,16 +72,7 @@ def view_letter(db: Session, raw_token: str, ip_address: str | None, user_agent:
     )
     db.commit()
 
-    return AccessLetterView(
-        reference=letter.reference or "",
-        sender_first_name=letter.sender_first_name,
-        sender_last_name=letter.sender_last_name,
-        subject=letter.subject,
-        message=letter.message,
-        status=letter.status,
-        has_document=letter.document is not None,
-        created_at=letter.created_at,
-    )
+    return _to_view(letter)
 
 
 def mark_opened(db: Session, raw_token: str, ip_address: str | None, user_agent: str | None) -> AccessLetterView:
@@ -86,48 +91,47 @@ def mark_opened(db: Session, raw_token: str, ip_address: str | None, user_agent:
     db.commit()
     db.refresh(letter)
 
-    return AccessLetterView(
-        reference=letter.reference or "",
-        sender_first_name=letter.sender_first_name,
-        sender_last_name=letter.sender_last_name,
-        subject=letter.subject,
-        message=letter.message,
-        status=letter.status,
-        has_document=letter.document is not None,
-        created_at=letter.created_at,
-    )
+    return _to_view(letter)
 
 
 def confirm_receipt(db: Session, raw_token: str, ip_address: str | None, user_agent: str | None) -> AccessLetterView:
     token, letter = _resolve_token(db, raw_token)
 
-    if letter.status != LetterStatus.RECEIVED:
-        letter_state.transition(letter, LetterStatus.RECEIVED)
-        audit_service.record_event(
-            db,
-            letter.id,
-            LetterEventType.RECEIPT_CONFIRMED,
-            ActorType.RECIPIENT,
-            ip_address,
-            user_agent,
+    # The acknowledgment of receipt (accusé de réception) is a paid, opt-in
+    # service. Without it, the sender is not entitled to a delivery proof --
+    # so a recipient cannot confirm receipt at all for such a letter, and no
+    # RECEIPT_CONFIRMED event/email (the actual "proof") is ever produced.
+    if not letter.acknowledgment_of_receipt:
+        raise ForbiddenError(
+            "Ce courrier ne comprend pas d'accusé de réception : la confirmation de réception "
+            "n'est pas disponible."
         )
-        db.flush()
 
-        confirmed_at = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
-        email_service.send_receipt_confirmed(
-            db, letter.id, letter.sender_email, letter.sender_first_name, letter.reference or "", confirmed_at
+    if letter.status == LetterStatus.RECEIVED:
+        return _to_view(letter)
+
+    if letter.status != LetterStatus.OPENED:
+        raise ConflictError(
+            f"Cannot confirm receipt for a letter in status {letter.status.value}"
         )
+
+    letter_state.transition(letter, LetterStatus.RECEIVED)
+    audit_service.record_event(
+        db,
+        letter.id,
+        LetterEventType.RECEIPT_CONFIRMED,
+        ActorType.RECIPIENT,
+        ip_address,
+        user_agent,
+    )
+    db.flush()
+
+    confirmed_at = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
+    email_service.send_receipt_confirmed(
+        db, letter.id, letter.sender_email, letter.sender_first_name, letter.reference or "", confirmed_at
+    )
 
     db.commit()
     db.refresh(letter)
 
-    return AccessLetterView(
-        reference=letter.reference or "",
-        sender_first_name=letter.sender_first_name,
-        sender_last_name=letter.sender_last_name,
-        subject=letter.subject,
-        message=letter.message,
-        status=letter.status,
-        has_document=letter.document is not None,
-        created_at=letter.created_at,
-    )
+    return _to_view(letter)

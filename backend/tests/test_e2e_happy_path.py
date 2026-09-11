@@ -3,8 +3,11 @@ from tests.conftest import sample_letter_form
 
 
 def test_full_happy_path(client, db_session, auth_headers):
-    # 1. Sender creates letter
-    create_response = client.post("/api/letters", data=sample_letter_form())
+    # 1. Sender creates letter (with acknowledgment of receipt, since this
+    # path exercises receipt confirmation -- without it, /receive is 403).
+    form = sample_letter_form()
+    form["acknowledgment_of_receipt"] = "true"
+    create_response = client.post("/api/letters", data=form)
     assert create_response.status_code == 201
     letter_id = create_response.json()["id"]
 

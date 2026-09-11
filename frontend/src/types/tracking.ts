@@ -26,5 +26,6 @@ export interface AccessLetterView {
   message: string | null
   status: LetterStatus
   has_document: boolean
+  acknowledgment_of_receipt: boolean
   created_at: string
 }

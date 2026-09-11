@@ -49,7 +49,7 @@ export function Access() {
     )
   }
 
-  const canConfirm = letter.status === "OPENED"
+  const canConfirm = letter.status === "OPENED" && letter.acknowledgment_of_receipt
   const alreadyReceived = letter.status === "RECEIVED"
 
   return (
@@ -83,17 +83,23 @@ export function Access() {
         <div className="mt-6">
           {alreadyReceived ? (
             <p className="text-sm font-medium text-accent-600">Réception déjà confirmée. Merci.</p>
-          ) : (
+          ) : letter.acknowledgment_of_receipt ? (
             <Button onClick={handleConfirm} isLoading={confirming} disabled={!canConfirm}>
               Confirmer la réception
             </Button>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Ce courrier ne comprend pas d'accusé de réception : aucune confirmation n'est nécessaire de votre part.
+            </p>
           )}
         </div>
 
-        <p className="mt-6 text-xs text-slate-400">
-          Cette confirmation atteste techniquement la réception via Courrier+. Elle ne constitue pas, en l'état, une
-          preuve légale équivalente à un accusé de réception postal officiel.
-        </p>
+        {letter.acknowledgment_of_receipt && (
+          <p className="mt-6 text-xs text-slate-400">
+            Cette confirmation atteste techniquement la réception via Courrier+. Elle ne constitue pas, en l'état, une
+            preuve légale équivalente à un accusé de réception postal officiel.
+          </p>
+        )}
       </div>
     </div>
   )

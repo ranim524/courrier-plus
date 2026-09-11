@@ -1,12 +1,13 @@
 import io
 from collections.abc import Generator
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import Base, get_db
 from app.core.rate_limit import limiter
 from app.main import app
@@ -37,6 +38,17 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def force_email_mock_mode():
+    """Tests must never depend on whatever is in the developer's real .env.
+    If a real RESEND_API_KEY is configured locally, force mock mode anyway so
+    the suite never makes a live network call to Resend -- individual tests
+    (e.g. test_resend_failure_is_handled_gracefully) can still override this
+    within their own `with patch(...)` block, which takes precedence while active."""
+    with patch.object(Settings, "is_email_mock_mode", new_callable=PropertyMock, return_value=True):
+        yield
 
 
 @pytest.fixture(autouse=True)

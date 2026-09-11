@@ -34,4 +34,5 @@ class AccessLetterView(BaseModel):
     message: str | None
     status: LetterStatus
     has_document: bool
+    acknowledgment_of_receipt: bool
     created_at: datetime

@@ -6,8 +6,10 @@ from app.services import access_service
 from tests.conftest import sample_letter_form
 
 
-def _create_paid_letter(client) -> str:
-    letter_id = client.post("/api/letters", data=sample_letter_form()).json()["id"]
+def _create_paid_letter(client, with_ar: bool = False) -> str:
+    form = sample_letter_form()
+    form["acknowledgment_of_receipt"] = "true" if with_ar else "false"
+    letter_id = client.post("/api/letters", data=form).json()["id"]
     payment = client.post("/api/payments/create", json={"letter_id": letter_id}).json()
     client.post("/api/payments/mock/confirm", json={"transaction_id": payment["transaction_id"], "outcome": "success"})
     return letter_id
@@ -35,7 +37,7 @@ def test_view_and_open_letter_with_valid_token(client, db_session):
 
 
 def test_confirm_receipt_transitions_to_received(client, db_session):
-    letter_id = _create_paid_letter(client)
+    letter_id = _create_paid_letter(client, with_ar=True)
     raw_token = access_service.create_access_token(db_session, letter_id)
     db_session.commit()
 
@@ -43,6 +45,38 @@ def test_confirm_receipt_transitions_to_received(client, db_session):
     receipt = client.post(f"/api/access/{raw_token}/receive")
     assert receipt.status_code == 200
     assert receipt.json()["status"] == "RECEIVED"
+
+
+def test_confirm_receipt_is_idempotent(client, db_session):
+    letter_id = _create_paid_letter(client, with_ar=True)
+    raw_token = access_service.create_access_token(db_session, letter_id)
+    db_session.commit()
+
+    client.post(f"/api/access/{raw_token}/open")
+    first = client.post(f"/api/access/{raw_token}/receive")
+    second = client.post(f"/api/access/{raw_token}/receive")
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["status"] == "RECEIVED"
+
+
+def test_confirm_receipt_without_acknowledgment_of_receipt_is_forbidden(client, db_session, auth_headers):
+    """A letter sent WITHOUT the paid AR option must never produce a delivery
+    proof for the sender: the recipient cannot confirm receipt at all."""
+    letter_id = _create_paid_letter(client, with_ar=False)
+    raw_token = access_service.create_access_token(db_session, letter_id)
+    db_session.commit()
+
+    client.post(f"/api/access/{raw_token}/open")
+    response = client.post(f"/api/access/{raw_token}/receive")
+    assert response.status_code == 403
+
+    # Letter stays OPENED, never reaches RECEIVED, and no proof email is sent.
+    letter = client.get(f"/api/admin/letters/{letter_id}", headers=auth_headers).json()
+    assert letter["status"] == "OPENED"
+
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert not any(e["email_type"] == "RECEIPT_CONFIRMED" for e in emails)
 
 
 def test_invalid_token_returns_404(client):
@@ -82,7 +116,7 @@ def test_revoked_token_returns_404(client, db_session):
 
 
 def test_confirm_receipt_before_opened_is_rejected_as_invalid_transition(client, db_session):
-    letter_id = _create_paid_letter(client)
+    letter_id = _create_paid_letter(client, with_ar=True)
     raw_token = access_service.create_access_token(db_session, letter_id)
     db_session.commit()
 

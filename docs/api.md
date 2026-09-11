@@ -50,7 +50,7 @@ PDF bytes and recomputes the price via `pricing_service.calculate_price()`. See
 | GET | `/api/track/{reference}` | Public tracking info + event timeline for a letter reference. |
 | GET | `/api/access/{token}` | Validates a recipient access token, records an access event, returns letter content. |
 | POST | `/api/access/{token}/open` | Marks the letter as `OPENED`, notifies the sender by email. |
-| POST | `/api/access/{token}/receive` | Marks the letter as `RECEIVED`, notifies the sender by email. |
+| POST | `/api/access/{token}/receive` | Marks the letter as `RECEIVED`, notifies the sender by email. **Only available if the letter was created with `acknowledgment_of_receipt: true`** — otherwise returns `403`, since a delivery proof is a paid, opt-in service (see `docs/database.md`). |
 | GET | `/api/access/{token}/document` | Streams the attached PDF, if any, for a valid token. |
 
 ## Admin (JWT-protected, `Authorization: Bearer <token>`)
