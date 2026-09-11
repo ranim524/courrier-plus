@@ -7,7 +7,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.models.enums import ActorType, LetterEventType, LetterStatus, PaymentStatus
 from app.models.payment import Payment
 from app.repositories import letter_repository, payment_repository
-from app.services import access_service, audit_service, delivery_service, email_service, letter_state
+from app.services import audit_service, delivery_service, email_service, letter_state
 from app.services.payment import get_payment_provider
 from app.utils.reference import generate_candidate_reference
 
@@ -84,10 +84,10 @@ def confirm_payment(db: Session, transaction_id: str, outcome: str) -> Payment:
 
         # Physical delivery order is created as soon as the letter is sent --
         # see app/services/delivery_service.py for the full state machine.
+        # The recipient never gets digital access to the letter's content or
+        # an email at this point: they are only ever notified once the
+        # physical letter is confirmed DELIVERED (see delivery_service).
         delivery_service.create_delivery_order(db, letter)
-
-        raw_token = access_service.create_access_token(db, letter.id)
-        access_url = f"{_frontend_access_url(raw_token)}"
 
         sent_date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M")
         tracking_url = _frontend_tracking_url(letter.reference)
@@ -105,15 +105,6 @@ def confirm_payment(db: Session, transaction_id: str, outcome: str) -> Payment:
             tracking_url,
             sent_date,
         )
-        email_service.send_recipient_notification(
-            db,
-            letter.id,
-            letter.recipient_email,
-            f"{letter.sender_first_name} {letter.sender_last_name}",
-            letter.subject,
-            access_url,
-            _expiration_info(),
-        )
     else:
         payment.status = PaymentStatus.FAILED
         letter_state.transition(letter, LetterStatus.FAILED)
@@ -124,20 +115,7 @@ def confirm_payment(db: Session, transaction_id: str, outcome: str) -> Payment:
     return payment
 
 
-def _frontend_access_url(raw_token: str) -> str:
-    from app.core.config import get_settings
-
-    return f"{get_settings().frontend_url}/access/{raw_token}"
-
-
 def _frontend_tracking_url(reference: str) -> str:
     from app.core.config import get_settings
 
     return f"{get_settings().frontend_url}/track/{reference}"
-
-
-def _expiration_info() -> str:
-    from app.core.config import get_settings
-
-    days = get_settings().access_token_expiration_days
-    return f"Ce lien est valable {days} jours."

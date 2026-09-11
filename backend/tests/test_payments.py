@@ -63,8 +63,8 @@ def test_duplicate_payment_confirmation_is_idempotent(client, auth_headers):
     assert len(sent_events) == 1
 
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
-    recipient_emails = [e for e in emails if e["email_type"] == "RECIPIENT_NOTIFICATION"]
-    assert len(recipient_emails) == 1
+    confirmation_emails = [e for e in emails if e["email_type"] == "PAYMENT_CONFIRMATION"]
+    assert len(confirmation_emails) == 1
 
 
 def test_confirm_unknown_transaction_returns_404(client):

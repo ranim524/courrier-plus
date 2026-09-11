@@ -13,7 +13,7 @@ Any time you touch `backend/app/`.
 
 ## Project conventions
 - Layering: `routes` → `services` → `repositories` → `models`. Never skip a layer.
-- One router per resource in `app/routes/` (e.g. `letters.py`, `payments.py`, `access.py`, `admin.py`), all mounted in `app/main.py` with an `/api` prefix.
+- One router per resource in `app/routes/` (e.g. `letters.py`, `payments.py`, `tracking.py`, `admin.py`, `delivery.py`), all mounted in `app/main.py` with an `/api` prefix.
 - Pydantic schemas live in `app/schemas/`, named `<Resource>Create`, `<Resource>Read`, `<Resource>Update`.
 - Services return plain data (ORM objects or dicts), never raise `HTTPException` directly — they raise domain exceptions (`app/core/exceptions.py`) which routes translate to HTTP responses via a shared exception handler.
 - Repositories take a `Session` and do CRUD only — no business rules.

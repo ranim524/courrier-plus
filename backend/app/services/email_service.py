@@ -9,10 +9,7 @@ from app.models.enums import EmailStatus, EmailType
 from app.repositories import email_event_repository
 from app.services.email_templates.delivery_confirmed_recipient import render_delivery_confirmed_recipient
 from app.services.email_templates.delivery_confirmed_sender import render_delivery_confirmed_sender
-from app.services.email_templates.letter_opened import render_letter_opened
 from app.services.email_templates.payment_confirmation import render_payment_confirmation
-from app.services.email_templates.receipt_confirmed import render_receipt_confirmed
-from app.services.email_templates.recipient_notification import render_recipient_notification
 from app.services.email_templates.system_error import render_system_error
 
 settings = get_settings()
@@ -73,33 +70,6 @@ def send_payment_confirmation(
         sender_first_name, reference, recipient_full_name, page_count, amount, currency, tracking_url, sent_date
     )
     return _send(db, letter_id, EmailType.PAYMENT_CONFIRMATION, sender_email, subject, html)
-
-
-def send_recipient_notification(
-    db: Session,
-    letter_id: UUID,
-    recipient_email: str,
-    sender_full_name: str,
-    subject_line: str,
-    access_url: str,
-    expiration_info: str,
-) -> EmailEvent:
-    subject, html = render_recipient_notification(sender_full_name, subject_line, access_url, expiration_info)
-    return _send(db, letter_id, EmailType.RECIPIENT_NOTIFICATION, recipient_email, subject, html)
-
-
-def send_letter_opened(
-    db: Session, letter_id: UUID, sender_email: str, sender_first_name: str, reference: str, opened_at: str
-) -> EmailEvent:
-    subject, html = render_letter_opened(sender_first_name, reference, opened_at)
-    return _send(db, letter_id, EmailType.LETTER_OPENED, sender_email, subject, html)
-
-
-def send_receipt_confirmed(
-    db: Session, letter_id: UUID, sender_email: str, sender_first_name: str, reference: str, confirmed_at: str
-) -> EmailEvent:
-    subject, html = render_receipt_confirmed(sender_first_name, reference, confirmed_at)
-    return _send(db, letter_id, EmailType.RECEIPT_CONFIRMED, sender_email, subject, html)
 
 
 def send_system_error(db: Session, letter_id: UUID, admin_email: str, reference: str, error_summary: str) -> EmailEvent:

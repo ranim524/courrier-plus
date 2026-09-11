@@ -7,9 +7,12 @@ ALLOWED_TRANSITIONS: dict[LetterStatus, set[LetterStatus]] = {
     LetterStatus.DRAFT: {LetterStatus.PENDING_PAYMENT, LetterStatus.CANCELLED},
     LetterStatus.PENDING_PAYMENT: {LetterStatus.PAID, LetterStatus.FAILED, LetterStatus.CANCELLED},
     LetterStatus.PAID: {LetterStatus.SENT, LetterStatus.FAILED},
-    LetterStatus.SENT: {LetterStatus.DELIVERED, LetterStatus.OPENED, LetterStatus.FAILED},
-    LetterStatus.DELIVERED: {LetterStatus.OPENED, LetterStatus.EXPIRED},
-    LetterStatus.OPENED: {LetterStatus.RECEIVED, LetterStatus.EXPIRED},
+    # The recipient has no digital access to the letter's content -- the only
+    # way forward from SENT is a physically confirmed delivery (see
+    # delivery_service.confirm_delivery), landing on RECEIVED when the paid
+    # acknowledgment-of-receipt option was requested, DELIVERED otherwise.
+    LetterStatus.SENT: {LetterStatus.DELIVERED, LetterStatus.RECEIVED, LetterStatus.FAILED},
+    LetterStatus.DELIVERED: set(),
     LetterStatus.RECEIVED: set(),
     LetterStatus.FAILED: set(),
     LetterStatus.REFUSED: set(),

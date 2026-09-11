@@ -41,9 +41,12 @@ All tables have `created_at`/`updated_at` timestamptz columns.
 | service_fee | numeric(10,3) | Courrier+'s own platform/processing fee |
 | total_amount / currency | numeric(10,3) / varchar(3) | full price snapshot at creation time (sum of all the above cost/fee columns) |
 
-**Status enum**: `DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED → OPENED → RECEIVED`, with
-exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. Transitions are enforced in code
-(`app/services/letter_state.py`), not by a DB trigger — kept simple and explicit.
+**Status enum**: `DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED` or `RECEIVED`, with
+exceptional states `FAILED`, `REFUSED`, `EXPIRED`, `CANCELLED`. `SENT` only ever moves forward via
+`delivery_service.confirm_delivery()` once an admin confirms the physical delivery — `RECEIVED` if
+the letter was created with `acknowledgment_of_receipt: true`, `DELIVERED` otherwise. Transitions
+are enforced in code (`app/services/letter_state.py`), not by a DB trigger — kept simple and
+explicit.
 
 **Pricing is a snapshot, not a live calculation.** `total_amount` and the rest of the pricing
 breakdown are computed once by `app/services/pricing_service.py` at letter-creation time and
@@ -81,6 +84,12 @@ providers, where the storage layer never knows about the `documents` table.
 | status | enum | `PENDING`, `PAID`, `FAILED`, `REFUNDED` |
 
 ## `access_tokens`
+**Historical only.** This table backed the recipient's secure digital-access link, which has been
+removed — the recipient no longer gets any digital access to a letter's content or any email
+before physical delivery is confirmed (see "Physical delivery tables" below). Nothing creates a
+new row here anymore; the table and its model/repository are kept only so already-existing rows
+remain readable.
+
 | Column | Type | Notes |
 |---|---|---|
 | letter_id | UUID FK | indexed |

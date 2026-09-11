@@ -4,7 +4,6 @@ import { AuthProvider } from "./hooks/useAuth"
 import { SendLetterWizardProvider } from "./hooks/useSendLetterWizard"
 import { AdminLayout } from "./layouts/AdminLayout"
 import { PublicLayout } from "./layouts/PublicLayout"
-import { Access } from "./pages/Access"
 import { Home } from "./pages/Home"
 import { TrackResult } from "./pages/TrackResult"
 import { TrackSearch } from "./pages/TrackSearch"
@@ -40,7 +39,6 @@ export default function App() {
             <Route path="/send/success" element={<SuccessStep />} />
             <Route path="/track" element={<TrackSearch />} />
             <Route path="/track/:reference" element={<TrackResult />} />
-            <Route path="/access/:token" element={<Access />} />
           </Route>
 
           <Route path="/admin/login" element={<AdminLogin />} />

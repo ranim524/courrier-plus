@@ -48,20 +48,25 @@ POST /api/payments/create → Letter → PENDING_PAYMENT, mock Payment created (
 POST /api/payments/mock/confirm (success) → idempotent:
    Payment → PAID
    Letter → PAID → SENT (unique public reference generated, e.g. TN-2026-0001847)
-   Access token generated (random, hashed in DB)
-   Emails sent: payment confirmation (sender), recipient notification (recipient)
+   DeliveryOrder auto-created (see "Physical delivery system" below)
+   Email sent: payment confirmation (sender only)
    │
    ▼
-RECIPIENT opens /access/{token} → RECIPIENT_LINK_ACCESSED event, then LETTER_OPENED
-   → Letter → OPENED, sender notified by email
+ADMIN runs the physical delivery through to DELIVERED (Admin → Livraisons)
    │
    ▼
-RECIPIENT confirms receipt → Letter → RECEIVED, RECEIPT_CONFIRMED event
-   → sender notified by email
+delivery_service.confirm_delivery() → Letter → RECEIVED (if acknowledgment of
+   receipt was requested) or DELIVERED (otherwise) — the only transition out
+   of SENT. DELIVERY_CONFIRMED_RECIPIENT + DELIVERY_CONFIRMED_SENDER emails sent.
 ```
 
-Every transition is explicit and validated by `app/services/letter_state.py` — an invalid jump
-(e.g. RECEIVED before OPENED) is rejected with HTTP 409, never silently allowed.
+**The recipient never gets an email or any digital access to the letter's content.** There is no
+secure link, no online view, no digital "open"/"confirm receipt" action — the only thing that ever
+reaches the recipient is the physical letter itself, and the only notification either side gets is
+the delivery-confirmed email once an admin confirms the physical delivery
+(`app/services/delivery_service.py::confirm_delivery`). Every transition is explicit and validated
+by `app/services/letter_state.py` — an invalid jump is rejected with HTTP 409, never silently
+allowed.
 
 ## Pricing model
 
@@ -137,10 +142,12 @@ DELIVERY_CONFIRMED_RECIPIENT / DELIVERY_CONFIRMED_SENDER emails
 ```
 
 - **Two linked, not duplicated, state machines.** `DeliveryOrder.status` (`DeliveryStatus`) holds the
-  detailed physical-delivery state; `Letter.status` only reflects the high-level `DELIVERED`
-  milestone by reusing the `LetterStatus.DELIVERED` member that already existed (dormant, sitting
-  between `SENT` and `OPENED`) before this module existed. `SENT` never means `DELIVERED` — only a
-  confirmed `DeliveryOrder.DELIVERED` can move the letter there.
+  detailed physical-delivery state; `Letter.status` only reflects the high-level outcome, moving
+  from `SENT` straight to `DELIVERED` or `RECEIVED` (if the paid acknowledgment-of-receipt option
+  was requested — this `ProofOfDelivery` *is* that accusé de réception) once
+  `DeliveryOrder.confirm_delivery()` runs. `SENT` never means delivered on its own — only a
+  confirmed `DeliveryOrder.DELIVERED` can move the letter there. There is no separate digital
+  "opened" state: the recipient has no online access to react to in the first place.
 - **Only `DELIVERED` triggers the "your letter was delivered" emails.** No earlier status
   (`ASSIGNED`, `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) sends anything to the recipient/sender.
   `delivery_service.confirm_delivery()` is the single, idempotent entry point that creates the
@@ -154,19 +161,20 @@ DELIVERY_CONFIRMED_RECIPIENT / DELIVERY_CONFIRMED_SENDER emails
 - **Audit trail reuses `letter_events`** (no separate `delivery_events` table) — every delivery
   event is already scoped to one letter, so the existing `LetterEventType` enum gained
   `DELIVERY_CREATED` ... `DELIVERY_CANCELLED` members instead of a parallel table.
-- **Public tracking/access views** (`GET /api/track/{reference}`, `GET /api/access/{token}`) expose
-  a `DeliveryPublicView` derived only from `DeliveryOrder`'s own timestamp columns — never courier
-  name/phone, admin notes, or internal database IDs. All delivery-mutating endpoints
-  (`/api/admin/deliveries/*`, `/api/admin/delivery-agents/*`) require an admin JWT; there is no
-  sender/recipient-facing route that can change a delivery's status.
+- **Public tracking view** (`GET /api/track/{reference}`) exposes a `DeliveryPublicView` derived
+  only from `DeliveryOrder`'s own timestamp columns — never courier name/phone, admin notes, or
+  internal database IDs. All delivery-mutating endpoints (`/api/admin/deliveries/*`,
+  `/api/admin/delivery-agents/*`) require an admin JWT; there is no sender/recipient-facing route
+  that can change a delivery's status.
 
 See `.claude/skills/delivery/SKILL.md` and `docs/database.md` for the full schema.
 
 ## Admin vs. public surface
 
-Senders and recipients never authenticate — they act through the letter creation form and
-secret, single-purpose access tokens. Only administrators have accounts and JWT-based sessions,
-scoped to `/api/admin/*`.
+Senders track their letter by its public reference at `/track/{reference}` — no account, no
+secret link. Only administrators have accounts and JWT-based sessions, scoped to `/api/admin/*`.
+The `access_tokens` table and its model/repository remain in the codebase only to keep historical
+audit data readable; nothing creates or reads a new one anymore (see `docs/database.md`).
 
 ## Legal note
 

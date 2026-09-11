@@ -12,13 +12,14 @@ claimed or implemented here.
 
 ## Implemented measures
 
-### Recipient access tokens
-- Generated with `secrets.token_urlsafe(32)` — a CSPRNG, never a sequential ID, email address, or
-  database primary key.
-- Only `SHA-256(token)` is stored (`access_tokens.token_hash`); the raw token exists only in the
-  URL emailed to the recipient.
-- Every token has an expiration (`ACCESS_TOKEN_EXPIRATION_DAYS`, default 30) and can be revoked.
-- Logs only ever show a short prefix of a token, never the full value.
+### No digital access for the recipient
+- The recipient never gets an email, a secure link, or any other digital access to a letter's
+  content — the only thing that ever reaches them is the physical letter itself, plus the
+  delivery-confirmed email once an admin confirms the physical delivery is complete (see
+  "Physical delivery" below). This removes an entire class of risk (token leakage, link forwarding,
+  expiry/revocation edge cases) by not having a recipient-facing secret at all.
+- The `access_tokens` table that used to back this flow is retained only as historical audit data
+  (see `docs/database.md`) — nothing creates or reads a new token anymore.
 
 ### Passwords & admin auth
 - Admin passwords hashed with bcrypt (`passlib`).
@@ -68,10 +69,9 @@ machine (`app/services/delivery_state.py`) follows the same pattern independentl
   requires an admin JWT — enforced by the `get_current_admin` dependency on the backend, not by
   hiding buttons in the UI. There is no sender/recipient-facing route that can change a delivery's
   status.
-- Public tracking (`/api/track/{reference}`) and the recipient's secure-link view
-  (`/api/access/{token}`) only ever expose a `DeliveryPublicView` (tracking number, status, a
-  timestamp-only timeline) — never courier name/phone, admin confirmation notes, or internal
-  database IDs.
+- Public tracking (`/api/track/{reference}`) only ever exposes a `DeliveryPublicView` (tracking
+  number, status, a timestamp-only timeline) — never courier name/phone, admin confirmation notes,
+  or internal database IDs.
 - `DeliveryOrder.confirm_delivery()` (the only path that can send a "your letter was delivered"
   email) is idempotent: a repeated confirmation never creates a duplicate `ProofOfDelivery`, audit
   event, or notification email — same idempotency discipline as payment confirmation above.

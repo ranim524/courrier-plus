@@ -10,7 +10,6 @@ export interface DashboardStats {
   pending_payment_letters: number
   paid_letters: number
   sent_letters: number
-  opened_letters: number
   received_letters: number
   failed_letters: number
   total_payments: number

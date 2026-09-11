@@ -149,13 +149,15 @@ def confirm_delivery(
     db.flush()
 
     letter = order.letter
-    # Best-effort: the recipient may already have progressed the letter past
-    # SENT via the independent digital access-link flow (OPENED/RECEIVED).
-    # DELIVERED only applies as a forward move from SENT; if it doesn't
-    # apply, the DeliveryOrder itself (not Letter.status) remains the
-    # authoritative record that the physical letter was delivered.
+    # The recipient has no digital way to confirm receipt anymore, so this
+    # physical confirmation is the only source of truth: it lands on
+    # RECEIVED when the sender paid for an acknowledgment of receipt (this
+    # ProofOfDelivery *is* that accusé de réception), DELIVERED otherwise.
+    # Guarded on SENT so a repeated confirm_delivery call (idempotency,
+    # above) never re-transitions the letter.
     if letter.status == LetterStatus.SENT:
-        letter_state.transition(letter, LetterStatus.DELIVERED)
+        target_status = LetterStatus.RECEIVED if letter.acknowledgment_of_receipt else LetterStatus.DELIVERED
+        letter_state.transition(letter, target_status)
 
     delivered_date = delivered_at.strftime("%d/%m/%Y")
     delivered_time = delivered_at.strftime("%H:%M")

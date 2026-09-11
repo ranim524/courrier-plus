@@ -30,7 +30,6 @@ class DashboardStats(BaseModel):
     pending_payment_letters: int
     paid_letters: int
     sent_letters: int
-    opened_letters: int
     received_letters: int
     failed_letters: int
     total_payments: int

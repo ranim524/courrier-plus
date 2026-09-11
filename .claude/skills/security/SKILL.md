@@ -13,12 +13,14 @@ Any time you: generate a token, handle a password, accept a file upload, write a
 
 ## Project conventions & rules
 
-### Tokens (recipient access)
-- Generate with `secrets.token_urlsafe(32)` (or similar CSPRNG) — never sequential IDs, emails, or DB PKs.
-- Store only `SHA-256(token)` in `access_tokens.token_hash`. The raw token is only ever in the URL sent by email; it is never persisted or logged in full.
-- Every token has `expires_at`. Default expiration: 30 days from letter send (configurable via `ACCESS_TOKEN_EXPIRATION_DAYS`).
-- Tokens can be revoked (`revoked_at`), checked on every access.
-- Log only a short prefix of a token (e.g. first 8 chars) if logging is needed for debugging — never the full value.
+### Recipient access (removed by design)
+- The recipient has no digital access to a letter's content and no token of their own — no secure
+  link, no online view, no email before physical delivery. The only thing that reaches them is the
+  physical letter and, once an admin confirms it delivered, the delivery-confirmed email. This is a
+  deliberate simplification, not an oversight: don't reintroduce a recipient-facing secret/token
+  without the user explicitly asking for it back.
+- `access_tokens`/`AccessToken` still exist as historical audit data only (see [[delivery]] and
+  `docs/database.md`) — nothing creates or reads a new one.
 
 ### Passwords (admin only)
 - Hashed with `passlib`'s bcrypt scheme. Never stored or logged in plaintext.
@@ -37,15 +39,17 @@ Any time you: generate a token, handle a password, accept a file upload, write a
 - Reject empty files.
 
 ### Auth & access control
-- Recipient/sender flows never require login — access is entirely token-based (letter reference for tracking is public/non-sensitive by design; access token for viewing content is secret).
+- Recipient/sender flows never require login. The letter reference used for public tracking
+  (`/api/track/{reference}`) is public/non-sensitive by design — there is no other recipient-facing
+  surface to protect.
 - Admin endpoints always check the JWT and role; never expose a letter/document to an unauthenticated request.
-- Rate limit sensitive public endpoints (`/api/admin/login`, `/api/access/{token}/*`, `/api/letters` creation) using `slowapi` or an in-memory limiter — see `app/core/rate_limit.py`.
+- Rate limit sensitive public endpoints (`/api/admin/login`, `/api/letters` creation, `/api/track/{reference}`) using `slowapi` or an in-memory limiter — see `app/core/rate_limit.py`.
 
 ### CORS
 - Restrict `allow_origins` to `FRONTEND_URL` from env — never `*` alongside credentials.
 
 ### Logging
-- Never log: passwords, JWT secret, full JWT, full access tokens, Resend API key, document contents, full request bodies containing sensitive data.
+- Never log: passwords, JWT secret, full JWT, Resend API key, document contents, full request bodies containing sensitive data.
 - Use the shared logger (`app/core/logging.py`); prefer structured log messages with safe context (letter reference, event type) over dumping objects.
 
 ### Error handling

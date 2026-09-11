@@ -7,7 +7,6 @@ class LetterStatus(str, enum.Enum):
     PAID = "PAID"
     SENT = "SENT"
     DELIVERED = "DELIVERED"
-    OPENED = "OPENED"
     RECEIVED = "RECEIVED"
     FAILED = "FAILED"
     REFUSED = "REFUSED"

@@ -26,16 +26,3 @@ class TrackingRead(BaseModel):
     created_at: datetime
     events: list[TrackingEvent]
     delivery: DeliveryPublicView | None = None
-
-
-class AccessLetterView(BaseModel):
-    reference: str
-    sender_first_name: str
-    sender_last_name: str
-    subject: str
-    message: str | None
-    status: LetterStatus
-    has_document: bool
-    acknowledgment_of_receipt: bool
-    created_at: datetime
-    delivery: DeliveryPublicView | None = None

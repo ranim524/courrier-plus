@@ -4,7 +4,6 @@ export type LetterStatus =
   | "PAID"
   | "SENT"
   | "DELIVERED"
-  | "OPENED"
   | "RECEIVED"
   | "FAILED"
   | "REFUSED"

@@ -166,19 +166,6 @@ def test_public_tracking_includes_delivery_view_without_courier_info(client, db_
     assert "id" not in body["delivery"]
 
 
-def test_recipient_access_view_includes_delivery_status(client, db_session):
-    from app.services import access_service
-
-    letter_id, order = _create_sent_letter(client, db_session)
-    raw_token = access_service.create_access_token(db_session, letter_id)
-    db_session.commit()
-
-    response = client.get(f"/api/access/{raw_token}")
-    assert response.status_code == 200
-    body = response.json()
-    assert body["delivery"]["tracking_number"] == order.tracking_number
-
-
 def test_delivery_agent_management(client, db_session, auth_headers):
     provider = delivery_provider_repository.get_by_code(db_session, "courrier_plus_internal")
     create_response = client.post(

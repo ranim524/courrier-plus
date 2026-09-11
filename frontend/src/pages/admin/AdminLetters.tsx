@@ -14,7 +14,6 @@ const STATUS_OPTIONS: LetterStatus[] = [
   "PAID",
   "SENT",
   "DELIVERED",
-  "OPENED",
   "RECEIVED",
   "FAILED",
   "REFUSED",

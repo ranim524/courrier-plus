@@ -11,7 +11,6 @@ const CARDS: { key: keyof DashboardStats; label: string }[] = [
   { key: "pending_payment_letters", label: "Paiement en attente" },
   { key: "paid_letters", label: "Payés" },
   { key: "sent_letters", label: "Envoyés" },
-  { key: "opened_letters", label: "Consultés" },
   { key: "received_letters", label: "Reçus" },
   { key: "failed_letters", label: "Échoués" },
 ]

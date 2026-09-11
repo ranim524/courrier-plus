@@ -53,7 +53,6 @@ def get_dashboard_stats(db: Session) -> DashboardStats:
         pending_payment_letters=letter_repository.count_by_status(db, LetterStatus.PENDING_PAYMENT),
         paid_letters=letter_repository.count_by_status(db, LetterStatus.PAID),
         sent_letters=letter_repository.count_by_status(db, LetterStatus.SENT),
-        opened_letters=letter_repository.count_by_status(db, LetterStatus.OPENED),
         received_letters=letter_repository.count_by_status(db, LetterStatus.RECEIVED),
         failed_letters=letter_repository.count_by_status(db, LetterStatus.FAILED),
         total_payments=payment_repository.count_all(db),

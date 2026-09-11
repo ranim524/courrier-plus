@@ -17,11 +17,11 @@ Any time an event needs to notify a sender or recipient by email.
 - If `RESEND_API_KEY` is empty/unset, the service runs in **mock mode**: it logs the would-be email (subject + recipient, never full body with tokens in production-style logs) and writes an `email_events` row with status `SENT` (mocked), so the rest of the app is fully testable without a real key.
 - Every email send is recorded as an `email_events` row: `email_type`, `recipient`, `status` (`PENDING` → `SENT`/`FAILED`), `provider_message_id`, `error_message` (safe, no secrets).
 - HTML templates live in `app/services/email_templates/` as simple Python functions returning HTML strings (Jinja2 optional but plain f-string/format templates are fine for this scale — avoid over-engineering).
-- Five email types: `PAYMENT_CONFIRMATION` (sender), `RECIPIENT_NOTIFICATION` (recipient), `LETTER_OPENED` (sender), `RECEIPT_CONFIRMED` (sender), `SYSTEM_ERROR` (admin/internal, only for critical failures).
+- Active email types: `PAYMENT_CONFIRMATION` (sender, on payment success), `DELIVERY_CONFIRMED_RECIPIENT`/`DELIVERY_CONFIRMED_SENDER` (both sides, only once an admin confirms physical delivery — see [[delivery]]), `SYSTEM_ERROR` (admin/internal, only for critical failures). `RECIPIENT_NOTIFICATION`, `LETTER_OPENED`, `RECEIPT_CONFIRMED` still exist as enum values (historical `email_events` rows reference them) but nothing sends them anymore — the recipient never gets digital access or an email before physical delivery.
 
 ## Important rules
 - Never hard-code an API key anywhere in source.
-- Never put a full access token in an email log line, only in the actual email body sent to the legitimate recipient.
+- Never put a secret/token in an email log line, only in the actual email body sent to the legitimate recipient.
 - Resend errors must not crash the request that triggered them — catch, log, record `FAILED` in `email_events`, and let the primary business operation (e.g. payment success) still succeed. Email is best-effort, not transactional with the core state change.
 - Keep templates branded consistently: Courrier+ header, consistent color, footer disclaimer that this is not a certified legal registered mail (see legal disclaimer in README).
 

@@ -10,16 +10,17 @@ without either party needing an account.
 
 ## Features
 
-- No-account sender/recipient flow: write a message or upload a PDF, pay, and a secure link is
-  emailed to the recipient.
+- No-account sender/recipient flow: write a message or upload a PDF, pay, and Courrier+ prints and
+  physically delivers it. The recipient never gets an account, an email, or any digital access to
+  the content — only the physical letter, and a confirmation email once it's actually delivered.
 - Unique public letter reference (`TN-2026-0001847`) generated only after successful payment.
-- Cryptographically random, hashed, expiring recipient access tokens.
-- Full lifecycle tracking (`DRAFT → PENDING_PAYMENT → PAID → SENT → OPENED → RECEIVED`, plus
+- Full lifecycle tracking (`DRAFT → PENDING_PAYMENT → PAID → SENT → DELIVERED`/`RECEIVED`, plus
   `FAILED`/`REFUSED`/`EXPIRED`/`CANCELLED`) with an explicit, validated state machine and full
   audit trail.
 - SHA-256 integrity hash on every uploaded document.
-- Transactional emails via Resend (payment confirmation, recipient notification, letter opened,
-  receipt confirmed), with a safe mock mode when no API key is configured.
+- Transactional emails via Resend (payment confirmation to the sender, delivery-confirmed emails to
+  both sender and recipient once physical delivery is confirmed), with a safe mock mode when no API
+  key is configured.
 - Abstracted mock payment provider (idempotent), designed to be swapped for a real Tunisian
   provider later without touching the rest of the app.
 - Physical delivery system: Courrier+ prints and physically delivers the letter — delivery orders,
@@ -153,15 +154,18 @@ separate from (but linked to) the letter's own lifecycle:
 Letter SENT (auto-creates the DeliveryOrder)
   → READY_FOR_DISPATCH → ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY
   → DELIVERED (proof of delivery + delivery-confirmed emails)
+      → Letter.status becomes RECEIVED (if acknowledgment of receipt was paid for)
+        or DELIVERED (otherwise) — the only way a letter ever leaves SENT
 ```
 or, on a failed attempt: `OUT_FOR_DELIVERY → DELIVERY_FAILED → (retry) or RETURNED_TO_SENDER`.
 
-**Only `DELIVERED` means the recipient actually received the physical letter** — no earlier status
-sends a "your letter was delivered" email, and the confirmation is idempotent (repeating it never
-sends a duplicate). Admins manage the whole flow from **Admin → Livraisons** (assign a courier,
-advance status, confirm delivery) and **Admin → Livreurs** (add/deactivate couriers). The public
-tracking page and the recipient's secure link both show the delivery status/timeline, without any
-courier or admin-only details.
+**Only a confirmed physical delivery means the recipient actually received the letter** — no
+earlier status sends any email, and the confirmation is idempotent (repeating it never sends a
+duplicate). The recipient has no digital access to the letter's content at any point — no secure
+link, no online view — only the physical letter and, once delivered, the confirmation email.
+Admins manage the whole flow from **Admin → Livraisons** (assign a courier, advance status, confirm
+delivery) and **Admin → Livreurs** (add/deactivate couriers). The public tracking page shows the
+delivery status/timeline, without any courier or admin-only details.
 
 Phase 1 ships one seeded provider, "Courrier+ Delivery" (manual/internal — every status change is
 a direct admin action, labeled "suivi manuel" in the UI since there's no real-time carrier feed).

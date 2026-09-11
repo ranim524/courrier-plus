@@ -6,14 +6,16 @@ description: Physical delivery system conventions for Courrier+ (delivery orders
 # Physical Delivery
 
 ## Purpose
-Manage the real physical delivery of a printed letter from Courrier+ to the recipient — separate from, but linked to, the digital access-link flow.
+Manage the real physical delivery of a printed letter from Courrier+ to the recipient — the *only*
+way a recipient is ever notified, since there is no digital access-link flow anymore (see
+[[security]]).
 
 ## When to use it
-Any time you touch `app/models/delivery.py`, `app/services/delivery_service.py`, `app/services/delivery_state.py`, `app/services/delivery/`, `app/routes/delivery.py`, or the delivery-related fields on `TrackingRead`/`AccessLetterView`.
+Any time you touch `app/models/delivery.py`, `app/services/delivery_service.py`, `app/services/delivery_state.py`, `app/services/delivery/`, `app/routes/delivery.py`, or the delivery-related field on `TrackingRead`.
 
 ## Project conventions
 - One `DeliveryOrder` per `Letter` (unique FK), auto-created by `delivery_service.create_delivery_order()` right after a letter reaches `SENT` (called from `payment_service.confirm_payment()`). It's immediately advanced to `READY_FOR_DISPATCH` — the prototype has no separate "printed"/"prepared" step to wait on.
-- Detailed physical status lives on `DeliveryOrder.status` (`DeliveryStatus`, see `delivery_state.py` for the full transition graph). `Letter.status` only reflects the high-level `DELIVERED` milestone — reuses the enum member that already existed in `LetterStatus` (dormant before this module), rather than inventing a parallel state machine. See [[database]].
+- Detailed physical status lives on `DeliveryOrder.status` (`DeliveryStatus`, see `delivery_state.py` for the full transition graph). `Letter.status` only ever leaves `SENT` via `confirm_delivery()`, landing on `RECEIVED` (if `acknowledgment_of_receipt` was requested — that `ProofOfDelivery` *is* the accusé de réception) or `DELIVERED` otherwise. See [[database]].
 - Provider abstraction mirrors [[payment]]/document-management's storage pattern exactly: `app/services/delivery/base.py` (`BaseDeliveryProvider`), `app/services/delivery/manual_provider.py` (`ManualDeliveryProvider`, phase 1 — no external API, all status changes come from admin actions), `app/services/delivery/__init__.py` (factory keyed by `DeliveryProvider.code`). A real carrier is added later as a new provider class + DB row, never by hardcoding a company name into `delivery_service.py` or routes.
 - Audit events reuse the existing `letter_events` table/`LetterEventType` enum (`DELIVERY_CREATED`, `DELIVERY_ASSIGNED`, ... `DELIVERY_CANCELLED`) — no separate `delivery_events` table, since every delivery event is already scoped to exactly one letter.
 - Tracking number format `CP-2026-0001847` (`app/utils/tracking_number.py`), generated the same way as the letter reference (`app/utils/reference.py`): random, unique (DB constraint + retry loop), never the row's UUID.
@@ -24,7 +26,7 @@ Any time you touch `app/models/delivery.py`, `app/services/delivery_service.py`,
 - `DELIVERED` is terminal — no administrative "undo" transition exists (deliberate, not an oversight). All status changes go through `delivery_state.transition()`, same explicit-allow-list pattern as `letter_state.py`.
 - Every mutating delivery endpoint lives under `/api/admin/deliveries/*` (or `/api/admin/delivery-agents/*`), behind `get_current_admin` — there is no sender/recipient-facing route that can change a delivery's status.
 - No API credentials are ever stored on `DeliveryProvider` rows, even for a future external carrier with `api_enabled=True` — they belong in environment variables, referenced by the provider's `code`. See [[security]].
-- Public views (`GET /api/track/{reference}`, `GET /api/access/{token}`) expose a `DeliveryPublicView` derived only from `DeliveryOrder`'s own timestamp columns — never courier name/phone, admin notes, or internal UUIDs. Built by `delivery_service.to_public_view()`.
+- The public view (`GET /api/track/{reference}`) exposes a `DeliveryPublicView` derived only from `DeliveryOrder`'s own timestamp columns — never courier name/phone, admin notes, or internal UUIDs. Built by `delivery_service.to_public_view()`.
 - `DeliveryAttempt` rows are created only on failure (`mark_failed`); a successful delivery gets a `ProofOfDelivery`, not an attempt row.
 
 ## Workflow to add a new admin action

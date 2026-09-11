@@ -19,16 +19,3 @@ export interface TrackingRead {
   events: TrackingEvent[]
   delivery: DeliveryPublicView | null
 }
-
-export interface AccessLetterView {
-  reference: string
-  sender_first_name: string
-  sender_last_name: string
-  subject: string
-  message: string | null
-  status: LetterStatus
-  has_document: boolean
-  acknowledgment_of_receipt: boolean
-  created_at: string
-  delivery: DeliveryPublicView | null
-}

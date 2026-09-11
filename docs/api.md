@@ -57,15 +57,17 @@ the actual uploaded PDF bytes and recomputes the full price via
 `pricing_service.calculate_letter_price()`. See `docs/database.md` for how the result is stored as
 an immutable snapshot, and `docs/architecture.md` for the page → sheet → weight → tariff pipeline.
 
-## Public — Tracking & Recipient Access
+## Public — Tracking
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/track/{reference}` | Public tracking info + event timeline for a letter reference. Includes a `delivery` object (tracking number, status, timeline) once a `DeliveryOrder` exists — no courier/admin info, see `docs/database.md`. |
-| GET | `/api/access/{token}` | Validates a recipient access token, records an access event, returns letter content. Includes the same safe `delivery` object. |
-| POST | `/api/access/{token}/open` | Marks the letter as `OPENED`, notifies the sender by email. |
-| POST | `/api/access/{token}/receive` | Marks the letter as `RECEIVED`, notifies the sender by email. **Only available if the letter was created with `acknowledgment_of_receipt: true`** — otherwise returns `403`, since a delivery proof is a paid, opt-in service (see `docs/database.md`). |
-| GET | `/api/access/{token}/document` | Streams the attached PDF, if any, for a valid token. |
+
+**The recipient has no digital access to a letter's content and no endpoint of their own.** There
+is no secure link, no online "view"/"open"/"confirm receipt" action. The only thing that ever
+reaches the recipient is the physical letter itself, plus a delivery-confirmed email sent once an
+admin confirms the physical delivery — see the `/api/admin/deliveries/{id}/confirm-delivery`
+endpoint below.
 
 ## Admin (JWT-protected, `Authorization: Bearer <token>`)
 
@@ -93,7 +95,7 @@ See `.claude/skills/delivery/SKILL.md` and `docs/architecture.md` for the full d
 | POST | `/api/admin/deliveries/{id}/pickup` | → `PICKED_UP`. |
 | POST | `/api/admin/deliveries/{id}/in-transit` | → `IN_TRANSIT`. |
 | POST | `/api/admin/deliveries/{id}/out-for-delivery` | → `OUT_FOR_DELIVERY`. |
-| POST | `/api/admin/deliveries/{id}/confirm-delivery` | `{"notes"?}` → `DELIVERED`. **The only endpoint that can trigger the delivery-confirmed emails.** Idempotent: confirming an already-`DELIVERED` order is a no-op. |
+| POST | `/api/admin/deliveries/{id}/confirm-delivery` | `{"notes"?}` → `DELIVERED`. **The only endpoint that can trigger the delivery-confirmed emails**, sent to both the recipient and the sender. Also moves `Letter.status` to `RECEIVED` (if `acknowledgment_of_receipt` was requested) or `DELIVERED` — the only way a letter ever leaves `SENT`. Idempotent: confirming an already-`DELIVERED` order is a no-op. |
 | POST | `/api/admin/deliveries/{id}/fail` | `{"reason", "notes"?}` → `DELIVERY_FAILED`, creates a `DeliveryAttempt`. |
 | POST | `/api/admin/deliveries/{id}/retry` | `DELIVERY_FAILED` → `OUT_FOR_DELIVERY` (next attempt). |
 | POST | `/api/admin/deliveries/{id}/return` | `DELIVERY_FAILED` → `RETURNED_TO_SENDER`. |
@@ -118,8 +120,7 @@ returns `409`, same convention as the letter state machine.
 - `201` — resource created (letter, payment)
 - `200` — successful read/action
 - `401` — missing/invalid admin JWT
-- `404` — resource not found (letter, invalid access token, invalid reference)
-- `409` — invalid state transition (e.g. confirming receipt before the letter was opened)
-- `410` — expired access token
+- `404` — resource not found (letter, invalid reference, invalid delivery id)
+- `409` — invalid state transition (e.g. confirming a delivery before it's `OUT_FOR_DELIVERY`)
 - `422` — validation error (bad input, invalid file, missing field)
 - `429` — rate limit exceeded
