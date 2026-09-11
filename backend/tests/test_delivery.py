@@ -7,10 +7,15 @@ from app.services import delivery_service
 from tests.conftest import sample_letter_form
 
 
-def _create_sent_letter(client, db_session):
+def _create_sent_letter(client, db_session, with_ar: bool = False):
     """Creates and pays a letter, which auto-creates its DeliveryOrder
-    (READY_FOR_DISPATCH) via the payment_service integration."""
-    letter_id = client.post("/api/letters", data=sample_letter_form()).json()["id"]
+    (READY_FOR_DISPATCH) via the payment_service integration. with_ar=True
+    requests the paid acknowledgment of receipt, which gates whether
+    mark_deposited waits for the recipient's own confirmation or finalizes
+    immediately (see test_deposit_without_ar_finalizes_immediately)."""
+    form = sample_letter_form()
+    form["acknowledgment_of_receipt"] = "true" if with_ar else "false"
+    letter_id = client.post("/api/letters", data=form).json()["id"]
     payment = client.post("/api/payments/create", json={"letter_id": letter_id}).json()
     client.post("/api/payments/mock/confirm", json={"transaction_id": payment["transaction_id"], "outcome": "success"})
     order = delivery_repository.get_by_letter_id(db_session, letter_id)
@@ -52,7 +57,7 @@ def test_tracking_number_is_unique_and_not_the_db_id(client, db_session):
 
 
 def test_full_delivery_workflow(client, db_session):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent = _create_agent(db_session)
     admin = FakeAdmin()
 
@@ -108,7 +113,7 @@ def test_deposited_required_before_delivered(client, db_session):
 
 
 def test_delivered_is_terminal_no_backward_transition(client, db_session):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent = _create_agent(db_session)
     admin = FakeAdmin()
 
@@ -124,7 +129,7 @@ def test_delivered_is_terminal_no_backward_transition(client, db_session):
 
 
 def test_force_confirm_is_idempotent(client, db_session):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent = _create_agent(db_session)
     admin = FakeAdmin()
 
@@ -140,7 +145,7 @@ def test_force_confirm_is_idempotent(client, db_session):
 
 
 def test_delivery_failure_and_retry(client, db_session):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent = _create_agent(db_session)
     admin = FakeAdmin()
 
@@ -190,7 +195,7 @@ def test_cancel_delivery_from_early_status(client, db_session):
 
 
 def test_letter_status_updates_to_delivered(client, db_session, auth_headers):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent = _create_agent(db_session)
     admin = FakeAdmin()
 
@@ -200,6 +205,34 @@ def test_letter_status_updates_to_delivered(client, db_session, auth_headers):
     delivery_service.mark_out_for_delivery(db_session, order.id, admin)
     delivery_service.mark_deposited(db_session, order.id, admin)
     delivery_service.force_confirm_delivery(db_session, order.id, admin)
+
+    letter = client.get(f"/api/admin/letters/{letter_id}", headers=auth_headers).json()
+    assert letter["status"] == "RECEIVED"
+
+
+def test_deposit_without_ar_finalizes_immediately(client, db_session, auth_headers):
+    """The recipient-confirmation wait is gated on the paid acknowledgment
+    of receipt: without it, a deposit IS the delivery -- no DEPOSITED wait,
+    no recipient email, straight to DELIVERED."""
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=False)
+    agent = _create_agent(db_session)
+    admin = FakeAdmin()
+
+    delivery_service.assign_courier(db_session, order.id, agent.id, admin)
+    delivery_service.mark_picked_up(db_session, order.id, admin)
+    delivery_service.mark_in_transit(db_session, order.id, admin)
+    delivery_service.mark_out_for_delivery(db_session, order.id, admin)
+
+    order = delivery_service.mark_deposited(db_session, order.id, admin)
+    assert order.status == DeliveryStatus.DELIVERED
+    assert order.deposited_at is not None
+    assert order.delivered_at is not None
+    assert order.confirmation_token_hash is None
+    assert order.proof is not None
+
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert not any(e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST" for e in emails)
+    assert any(e["email_type"] == "DELIVERY_CONFIRMED_SENDER" for e in emails)
 
     letter = client.get(f"/api/admin/letters/{letter_id}", headers=auth_headers).json()
     assert letter["status"] == "DELIVERED"

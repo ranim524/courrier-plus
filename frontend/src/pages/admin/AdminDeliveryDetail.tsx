@@ -115,6 +115,10 @@ export function AdminDeliveryDetail() {
               <dt className="text-slate-500">Tentatives échouées</dt>
               <dd className="text-slate-800">{d.attempt_count}</dd>
             </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Accusé de réception</dt>
+              <dd className="text-slate-800">{d.acknowledgment_of_receipt ? "Demandé (payant)" : "Non demandé"}</dd>
+            </div>
           </dl>
         </div>
 
@@ -267,8 +271,17 @@ export function AdminDeliveryDetail() {
               destinataire.
               <br />
               <br />
-              Un e-mail sera envoyé au destinataire lui demandant de confirmer la réception. L'expéditeur ne sera
-              informé qu'après cette confirmation.
+              {d.acknowledgment_of_receipt ? (
+                <>
+                  Un e-mail sera envoyé au destinataire lui demandant de confirmer la réception. L'expéditeur ne sera
+                  informé qu'après cette confirmation (accusé de réception demandé).
+                </>
+              ) : (
+                <>
+                  Ce courrier n'a pas d'accusé de réception : la livraison sera immédiatement marquée comme
+                  confirmée et l'expéditeur en sera notifié tout de suite, sans action du destinataire.
+                </>
+              )}
             </>
           }
           confirmLabel="Marquer comme déposée"

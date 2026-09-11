@@ -57,12 +57,18 @@ ADMIN runs the physical delivery through to OUT_FOR_DELIVERY, then DEPOSITED
    external carrier's own platform via a webhook, see below)
    │
    ▼
-delivery_service.mark_deposited() → single-use confirmation link emailed to
-   the recipient. Sender still gets nothing.
+delivery_service.mark_deposited() -- branches on acknowledgment_of_receipt:
    │
-   ▼
-RECIPIENT clicks the link (POST /api/delivery-confirmation/{token}/confirm)
-   -- or an admin force-confirms if the recipient never responds
+   ├─ NOT requested → no accusé de réception to collect: finalizes
+   │  immediately, no recipient email at all, sender notified right away
+   │  (same as force_confirm_delivery below, just automatic)
+   │
+   └─ requested (paid +2.500 TND) → single-use confirmation link emailed
+      to the recipient; sender still gets nothing
+      │
+      ▼
+      RECIPIENT clicks the link (POST /api/delivery-confirmation/{token}/confirm)
+      -- or an admin force-confirms if the recipient never responds
    │
    ▼
 delivery_service._finalize_delivery() → Letter → RECEIVED (if acknowledgment
@@ -70,10 +76,12 @@ delivery_service._finalize_delivery() → Letter → RECEIVED (if acknowledgment
    out of SENT. DELIVERY_CONFIRMED_SENDER email sent (sender only).
 ```
 
-**The recipient never gets any digital access to the letter's content**, and gets exactly one email
-before the process above (the confirmation-request link) — no secure link to view the subject,
-message, or PDF, no "open" action. Every transition is explicit and validated by
-`app/services/letter_state.py` — an invalid jump is rejected with HTTP 409, never silently allowed.
+**The recipient never gets any digital access to the letter's content.** A letter *without* the paid
+acknowledgment-of-receipt option gets the recipient zero emails, ever. A letter *with* it gets the
+recipient exactly one email — the confirmation-request link above — which never shows the subject,
+message, or PDF, just enough to recognize which letter this is and a confirm button. Every
+transition is explicit and validated by `app/services/letter_state.py` — an invalid jump is rejected
+with HTTP 409, never silently allowed.
 
 ## Pricing model
 
@@ -153,13 +161,16 @@ ASSIGNED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DEPOSITED
                                                          DELIVERY_CONFIRMED_SENDER
 ```
 
-- **Deposit and confirmation are two separate steps, not one.** `mark_deposited()` (called by an
-  admin for the manual/internal provider, or an external carrier's own platform via
-  `POST /api/webhooks/delivery/deposited`) only means the letter was physically placed in the
-  mailbox — it does **not** notify the sender. It emails the recipient a single-use confirmation
-  link; only once they click it (`confirm_delivery_by_recipient`), or an admin uses the
-  `force-confirm` fallback if they never respond, does the delivery reach `DELIVERED` and the
-  sender get notified. Both paths share the same idempotent `_finalize_delivery()` internals.
+- **Deposit and confirmation are two separate steps for an AR letter, gated on
+  `acknowledgment_of_receipt`.** `mark_deposited()` (called by an admin for the manual/internal
+  provider, or an external carrier's own platform via `POST /api/webhooks/delivery/deposited`)
+  means the letter was physically placed in the mailbox. Without the paid AR option there's no
+  accusé de réception to collect, so it finalizes immediately -- no recipient email, sender
+  notified right away. With it, it does **not** notify the sender yet: it emails the recipient a
+  single-use confirmation link, and only once they click it (`confirm_delivery_by_recipient`), or
+  an admin uses the `force-confirm` fallback if they never respond, does the delivery reach
+  `DELIVERED` and the sender get notified. All three paths share the same idempotent
+  `_finalize_delivery()` internals.
 - **Two linked, not duplicated, state machines.** `DeliveryOrder.status` (`DeliveryStatus`) holds the
   detailed physical-delivery state; `Letter.status` only reflects the high-level outcome, moving
   from `SENT` straight to `DELIVERED` or `RECEIVED` (if the paid acknowledgment-of-receipt option

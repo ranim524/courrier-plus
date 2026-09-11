@@ -87,6 +87,7 @@ class DeliveryOrderRead(BaseModel):
     letter_reference: str | None
     tracking_number: str
     status: DeliveryStatus
+    acknowledgment_of_receipt: bool
     provider: DeliveryProviderRead
     courier: DeliveryAgentRead | None
     attempt_count: int

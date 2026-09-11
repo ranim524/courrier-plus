@@ -69,10 +69,14 @@ that the physical letter was actually received — see below.
 
 ## Public — Delivery confirmation
 
-Once a delivery is `DEPOSITED` (physically placed in the recipient's mailbox — see the admin/webhook
-endpoints further down), the recipient gets a single-use link by email to confirm receipt. This is
-the only digital action the recipient can ever take, and it exposes only enough to recognize which
-letter this is about — never the subject, message, or PDF.
+**Only letters created with `acknowledgment_of_receipt: true` (the paid `+2.500 TND` option) ever
+reach `DEPOSITED` or trigger this.** For any other letter, a deposit finalizes straight to
+`DELIVERED` with no recipient involvement at all — this section doesn't apply to it.
+
+Once such a delivery is `DEPOSITED` (physically placed in the recipient's mailbox — see the
+admin/webhook endpoints further down), the recipient gets a single-use link by email to confirm
+receipt. This is the only digital action the recipient can ever take, and it exposes only enough to
+recognize which letter this is about — never the subject, message, or PDF.
 
 | Method | Path | Description |
 |---|---|---|
@@ -111,8 +115,8 @@ See `.claude/skills/delivery/SKILL.md` and `docs/architecture.md` for the full d
 | POST | `/api/admin/deliveries/{id}/pickup` | → `PICKED_UP`. |
 | POST | `/api/admin/deliveries/{id}/in-transit` | → `IN_TRANSIT`. |
 | POST | `/api/admin/deliveries/{id}/out-for-delivery` | → `OUT_FOR_DELIVERY`. |
-| POST | `/api/admin/deliveries/{id}/deposit` | → `DEPOSITED`. The letter was physically placed in the recipient's mailbox — admin-side equivalent of the external-carrier webhook below (for the manual/internal provider). Emails the recipient a single-use confirmation link. Does **not** notify the sender yet. |
-| POST | `/api/admin/deliveries/{id}/force-confirm` | `{"notes"?}` → `DELIVERED`. Admin fallback for when the recipient never confirms. Only reachable from `DEPOSITED`. **This or the recipient's own confirmation (see below) are the only two ways to trigger the sender's delivery-confirmed email.** Also moves `Letter.status` to `RECEIVED` (if `acknowledgment_of_receipt` was requested) or `DELIVERED`. Idempotent: confirming an already-`DELIVERED` order is a no-op. |
+| POST | `/api/admin/deliveries/{id}/deposit` | The letter was physically placed in the recipient's mailbox — admin-side equivalent of the external-carrier webhook below (for the manual/internal provider). **Behavior depends on `acknowledgment_of_receipt`**: if the letter was created with it (`+2.500 TND`), → `DEPOSITED` and emails the recipient a single-use confirmation link (sender gets nothing yet); otherwise there is no accusé de réception to collect, so it finalizes immediately → `DELIVERED`, with no recipient email at all, and the sender is notified right away (same as `force-confirm` below). |
+| POST | `/api/admin/deliveries/{id}/force-confirm` | `{"notes"?}` → `DELIVERED`. Admin fallback for when a paid accusé-de-réception recipient never confirms. Only reachable from `DEPOSITED` (never needed for a non-AR letter, which is already `DELIVERED` after `/deposit`). **This or the recipient's own confirmation (see below) are the only two ways to trigger the sender's delivery-confirmed email for an AR letter.** Also moves `Letter.status` to `RECEIVED` (AR) or `DELIVERED`. Idempotent: confirming an already-`DELIVERED` order is a no-op. |
 | POST | `/api/admin/deliveries/{id}/fail` | `{"reason", "notes"?}` → `DELIVERY_FAILED`, creates a `DeliveryAttempt`. |
 | POST | `/api/admin/deliveries/{id}/retry` | `DELIVERY_FAILED` → `OUT_FOR_DELIVERY` (next attempt). |
 | POST | `/api/admin/deliveries/{id}/return` | `DELIVERY_FAILED` → `RETURNED_TO_SENDER`. |

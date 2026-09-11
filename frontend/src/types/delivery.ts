@@ -74,6 +74,7 @@ export interface DeliveryOrderRead {
   letter_reference: string | null
   tracking_number: string
   status: DeliveryStatus
+  acknowledgment_of_receipt: boolean
   provider: DeliveryProviderRead
   courier: DeliveryAgentRead | null
   attempt_count: number

@@ -7,8 +7,13 @@ from app.services import delivery_service
 from tests.conftest import sample_letter_form
 
 
-def _create_sent_letter(client, db_session):
-    letter_id = client.post("/api/letters", data=sample_letter_form()).json()["id"]
+def _create_sent_letter(client, db_session, with_ar: bool = False):
+    """with_ar=True requests the paid acknowledgment of receipt, which gates
+    whether a deposit waits for the recipient's own confirmation or
+    finalizes immediately (see test_deposit_without_ar_finalizes_immediately)."""
+    form = sample_letter_form()
+    form["acknowledgment_of_receipt"] = "true" if with_ar else "false"
+    letter_id = client.post("/api/letters", data=form).json()["id"]
     payment = client.post("/api/payments/create", json={"letter_id": letter_id}).json()
     client.post("/api/payments/mock/confirm", json={"transaction_id": payment["transaction_id"], "outcome": "success"})
     order = delivery_repository.get_by_letter_id(db_session, letter_id)
@@ -49,7 +54,7 @@ def _deposit_with_known_token(client, auth_headers, delivery_id, raw_token="test
 
 
 def test_no_delivery_email_before_deposited_then_exactly_one_on_recipient_confirm(client, db_session, auth_headers):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
 
     client.post(f"/api/admin/deliveries/{order.id}/assign", headers=auth_headers, json={"agent_id": agent_id})
@@ -95,7 +100,7 @@ def test_no_delivery_email_before_deposited_then_exactly_one_on_recipient_confir
 
 
 def test_force_confirm_delivery_idempotent_no_duplicate_proof(client, db_session, auth_headers):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
     _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
     client.post(f"/api/admin/deliveries/{order.id}/deposit", headers=auth_headers)
@@ -112,7 +117,7 @@ def test_force_confirm_delivery_idempotent_no_duplicate_proof(client, db_session
 def test_force_confirm_after_recipient_already_confirmed_is_a_no_op(client, db_session, auth_headers):
     """Admin fallback must never duplicate the sender email if the recipient
     happened to confirm in the meantime."""
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
     _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
     raw_token = _deposit_with_known_token(client, auth_headers, order.id)
@@ -130,7 +135,7 @@ def test_force_confirm_after_recipient_already_confirmed_is_a_no_op(client, db_s
 
 
 def test_confirmation_view_shows_no_letter_content(client, db_session, auth_headers):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
     _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
     raw_token = _deposit_with_known_token(client, auth_headers, order.id)
@@ -162,7 +167,7 @@ def test_confirmation_before_deposited_returns_404(client, db_session):
 
 
 def test_webhook_deposits_delivery_with_valid_secret(client, db_session, auth_headers):
-    letter_id, order = _create_sent_letter(client, db_session)
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=True)
     agent_id = _create_agent_via_api(client, auth_headers, db_session)
     _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
 
@@ -177,6 +182,28 @@ def test_webhook_deposits_delivery_with_valid_secret(client, db_session, auth_he
 
     emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
     assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST"]) == 1
+
+
+def test_webhook_deposit_without_ar_finalizes_immediately(client, db_session, auth_headers):
+    """Same AR gating as the admin /deposit action: an external carrier's
+    webhook report finalizes straight to DELIVERED when the letter has no
+    acknowledgment of receipt -- no recipient email, no waiting."""
+    letter_id, order = _create_sent_letter(client, db_session, with_ar=False)
+    agent_id = _create_agent_via_api(client, auth_headers, db_session)
+    _advance_to_out_for_delivery(client, auth_headers, order.id, agent_id)
+
+    with patch.object(get_settings(), "delivery_webhook_secret", "test-webhook-secret"):
+        response = client.post(
+            "/api/webhooks/delivery/deposited",
+            json={"provider_code": "courrier_plus_internal", "tracking_number": order.tracking_number},
+            headers={"X-Webhook-Secret": "test-webhook-secret"},
+        )
+    assert response.status_code == 200
+    assert response.json()["status"] == "DELIVERED"
+
+    emails = client.get(f"/api/admin/letters/{letter_id}/emails", headers=auth_headers).json()
+    assert not any(e["email_type"] == "DELIVERY_CONFIRMATION_REQUEST" for e in emails)
+    assert len([e for e in emails if e["email_type"] == "DELIVERY_CONFIRMED_SENDER"]) == 1
 
 
 def test_webhook_rejects_wrong_secret(client, db_session, auth_headers):

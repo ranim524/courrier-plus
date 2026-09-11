@@ -155,23 +155,27 @@ Letter SENT (auto-creates the DeliveryOrder)
   → READY_FOR_DISPATCH → ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY
   → DEPOSITED (letter physically placed in the mailbox — admin action, or an
                external carrier's own platform via a webhook)
-      → recipient emailed a single-use link to confirm receipt
+      → WITHOUT "Avec accusé de réception (+2.500 TND)": finalizes immediately,
+        no recipient email, sender notified right away
+      → WITH it: recipient emailed a single-use link to confirm receipt first
   → DELIVERED (recipient confirms, or an admin force-confirms as a fallback)
       → proof of delivery + delivery-confirmed email to the sender
-      → Letter.status becomes RECEIVED (if acknowledgment of receipt was paid for)
-        or DELIVERED (otherwise) — the only way a letter ever leaves SENT
+      → Letter.status becomes RECEIVED (with AR) or DELIVERED (without) —
+        the only way a letter ever leaves SENT
 ```
 or, on a failed attempt: `OUT_FOR_DELIVERY → DELIVERY_FAILED → (retry) or RETURNED_TO_SENDER`.
 
-**Deposit and confirmation are two separate steps.** Placing the letter in the mailbox doesn't
-notify anyone by itself — it emails the recipient a single-use link asking them to confirm receipt,
-and only that confirmation (or an admin's manual override, if the recipient never responds) notifies
-the sender. This is the recipient's *only* digital touchpoint: the link never shows the letter's
-content, just enough to recognize which letter it's about, and it's single-use (reusing it 404s
-rather than duplicating anything). Admins manage the whole flow from **Admin → Livraisons** (assign
-a courier, advance status, mark deposited, force-confirm) and **Admin → Livreurs**
-(add/deactivate couriers). The public tracking page shows the delivery status/timeline, without any
-courier or admin-only details.
+**Only a letter with the paid "Avec accusé de réception (+2.500 TND)" option ever involves the
+recipient digitally**, and even then only this one narrow action. For such a letter, deposit and
+confirmation are two separate steps: placing it in the mailbox doesn't notify anyone by itself — it
+emails the recipient a single-use link asking them to confirm receipt, and only that confirmation
+(or an admin's manual override, if the recipient never responds) notifies the sender. The link never
+shows the letter's content, just enough to recognize which letter it's about, and it's single-use
+(reusing it 404s rather than duplicating anything). A letter *without* that option skips all of this
+— deposit *is* delivery, the sender is notified immediately, and the recipient gets no email at all.
+Admins manage the whole flow from **Admin → Livraisons** (assign a courier, advance status, mark
+deposited, force-confirm) and **Admin → Livreurs** (add/deactivate couriers). The public tracking
+page shows the delivery status/timeline, without any courier or admin-only details.
 
 A real external carrier reports a deposit through `POST /api/webhooks/delivery/deposited`
 (authenticated by `DELIVERY_WEBHOOK_SECRET`) instead of the admin clicking a button — same

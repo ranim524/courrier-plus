@@ -130,21 +130,36 @@ def mark_deposited(db: Session, delivery_id: UUID, admin: Admin | None = None) -
     """The letter was physically placed in the recipient's mailbox. Called
     either by an admin (manual/internal provider, phase 1 -- Admin >
     Livraisons) or by an external carrier's own platform via a webhook (see
-    routes/delivery_webhook.py, admin=None there). Not the final word yet:
-    generates a single-use confirmation token and emails the recipient
-    asking them to confirm receipt -- the only digital touchpoint they ever
-    get, and it never exposes the letter's content (just a reference and a
-    confirm button)."""
+    routes/delivery_webhook.py, admin=None there).
+
+    The recipient-confirmation step below is gated on the paid
+    acknowledgment-of-receipt option: without it, a deposit *is* the
+    delivery -- there is no accusé de réception to collect, so this
+    finalizes immediately (no recipient email, no waiting, straight to
+    DELIVERED). With it, a single-use confirmation token is generated and
+    the recipient is emailed asking them to confirm receipt -- the only
+    digital touchpoint they ever get, and it never exposes the letter's
+    content (just a reference and a confirm button)."""
     order = get_delivery_or_404(db, delivery_id)
     delivery_state.transition(order, DeliveryStatus.DEPOSITED)
     order.deposited_at = datetime.now(timezone.utc)
     _record(db, order, LetterEventType.DELIVERY_DEPOSITED, admin)
+    db.flush()
+
+    letter = order.letter
+    if not letter.acknowledgment_of_receipt:
+        return _finalize_delivery(
+            db,
+            order,
+            delivered_by="Livraison standard (sans accusé de réception)",
+            delivery_method="Dépôt confirmé (sans accusé de réception demandé)",
+            admin=admin,
+        )
 
     raw_token = generate_secure_token()
     order.confirmation_token_hash = hash_token(raw_token)
     db.flush()
 
-    letter = order.letter
     confirm_url = f"{_frontend_url()}/confirm-delivery/{raw_token}"
     email_service.send_delivery_confirmation_request(
         db, letter.id, letter.recipient_email, letter.reference or "", confirm_url
@@ -361,6 +376,7 @@ def to_read(order: DeliveryOrder):
         letter_reference=order.letter.reference,
         tracking_number=order.tracking_number,
         status=order.status,
+        acknowledgment_of_receipt=order.letter.acknowledgment_of_receipt,
         provider=order.provider,
         courier=order.courier,
         attempt_count=order.attempt_count,
