@@ -78,7 +78,7 @@ export function PricingSummary({ pricing, documentName }: PricingSummaryProps) {
           <span className="font-medium text-brand-800">{pricing.delivery_fee} {pricing.currency}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-brand-600">Frais de service Courrier+</span>
+          <span className="text-brand-600">Frais de service</span>
           <span className="font-medium text-brand-800">{pricing.service_fee} {pricing.currency}</span>
         </div>
       </div>

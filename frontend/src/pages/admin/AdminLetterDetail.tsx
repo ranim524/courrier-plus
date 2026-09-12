@@ -150,7 +150,7 @@ export function AdminLetterDetail() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Frais de service Courrier+</span>
+              <span className="text-slate-500">Frais de service</span>
               <span className="text-slate-800">
                 {letter.service_fee.toFixed(3)} {letter.currency}
               </span>
