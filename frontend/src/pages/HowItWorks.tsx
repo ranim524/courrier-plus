@@ -42,7 +42,7 @@ const CONCEPT_POINTS = [
 const SENDER_JOURNEY = [
   "Renseigner ses informations et celles du destinataire",
   "Rédiger un message ou joindre un document PDF",
-  "Choisir les options (impression, accusé de réception)",
+  "Choisir l'option d'accusé de réception si besoin",
   "Payer en ligne et recevoir une référence unique",
   "Suivre l'avancement jusqu'à la livraison",
 ]
