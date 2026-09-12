@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
 import { Button } from "../../components/Button"
 import { Input } from "../../components/Input"
 import { StepProgress } from "../../components/StepProgress"
@@ -15,8 +15,7 @@ export function RecipientStep() {
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   if (!sender.email) {
-    navigate("/send/sender")
-    return null
+    return <Navigate to="/send/sender" replace />
   }
 
   function validate(): boolean {

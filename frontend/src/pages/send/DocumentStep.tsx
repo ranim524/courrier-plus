@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
 import { Button } from "../../components/Button"
 import { ErrorMessage } from "../../components/ErrorMessage"
 import { FileDropzone } from "../../components/FileDropzone"
@@ -32,11 +32,6 @@ export function DocumentStep() {
   const [pricingError, setPricingError] = useState<string | null>(null)
   const [pricingLoading, setPricingLoading] = useState(false)
 
-  if (!recipient.email) {
-    navigate("/send/recipient")
-    return null
-  }
-
   // The backend is the only source of truth for page count and price: every
   // time the PDF or the acknowledgment-of-receipt option changes, ask it for
   // a fresh preview rather than computing anything client-side.
@@ -64,6 +59,10 @@ export function DocumentStep() {
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, file, ackOfReceipt])
+
+  if (!recipient.email) {
+    return <Navigate to="/send/recipient" replace />
+  }
 
   function validate(): boolean {
     const next: Record<string, string> = {}

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
 import { Button } from "../../components/Button"
 import { ErrorMessage } from "../../components/ErrorMessage"
 import { StepProgress } from "../../components/StepProgress"
@@ -15,8 +15,7 @@ export function PaymentStep() {
   const [submitting, setSubmitting] = useState(false)
 
   if (!wizard.transactionId) {
-    navigate("/send/review")
-    return null
+    return <Navigate to="/send/review" replace />
   }
 
   async function pay(outcome: "success" | "failure") {
