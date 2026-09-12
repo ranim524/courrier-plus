@@ -6,6 +6,7 @@ import { AdminLayout } from "./layouts/AdminLayout"
 import { PublicLayout } from "./layouts/PublicLayout"
 import { ConfirmDelivery } from "./pages/ConfirmDelivery"
 import { Home } from "./pages/Home"
+import { HowItWorks } from "./pages/HowItWorks"
 import { TrackResult } from "./pages/TrackResult"
 import { TrackSearch } from "./pages/TrackSearch"
 import { AdminDashboard } from "./pages/admin/AdminDashboard"
@@ -31,6 +32,7 @@ export default function App() {
         <Routes>
           <Route element={<PublicLayout />}>
             <Route path="/" element={<Home />} />
+            <Route path="/comment-ca-marche" element={<HowItWorks />} />
             <Route path="/send" element={<Navigate to="/send/sender" replace />} />
             <Route path="/send/sender" element={<SenderStep />} />
             <Route path="/send/recipient" element={<RecipientStep />} />

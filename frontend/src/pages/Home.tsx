@@ -61,6 +61,11 @@ export function Home() {
             </div>
           ))}
         </div>
+        <p className="mt-8 text-center">
+          <Link to="/comment-ca-marche" className="text-sm font-semibold text-brand-600 hover:underline">
+            Voir le fonctionnement complet de Courrier+ →
+          </Link>
+        </p>
       </section>
 
       <section className="bg-white py-16">

@@ -9,6 +9,9 @@ export function PublicLayout() {
             Courrier<span className="text-accent-500">+</span>
           </Link>
           <nav className="flex items-center gap-4 text-sm font-medium text-slate-600">
+            <Link to="/comment-ca-marche" className="hover:text-brand-700">
+              Comment ça marche
+            </Link>
             <Link to="/send/sender" className="hover:text-brand-700">
               Envoyer un courrier
             </Link>
